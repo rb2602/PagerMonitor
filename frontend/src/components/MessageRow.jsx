@@ -44,7 +44,7 @@ function Badge({ label, color, title, onClick }) {
     <span onClick={e => { e.stopPropagation(); onClick?.(); }} title={title}
       style={{ fontSize:'0.62rem', fontWeight:600, padding:'0.1rem 0.4rem', borderRadius:'0.75rem',
         color, background:color+'22', border:`1px solid ${color}44`,
-        whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'90px', flexShrink:0,
+        whiteSpace:'nowrap', flexShrink:0,
         cursor: onClick ? 'pointer' : 'default', transition: onClick ? 'background 0.1s' : 'none' }}
       onMouseEnter={e => onClick && (e.currentTarget.style.background = color+'44')}
       onMouseLeave={e => onClick && (e.currentTarget.style.background = color+'22')}>
@@ -114,8 +114,8 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
             onMouseLeave={e => e.currentTarget.style.background='transparent'}>
             {msg.capcode}
           </span>
-          {/* Badge column — fixed width so message always aligns */}
-          <div style={{ flexShrink:0, width:BADGE_COL_W, display:'flex', alignItems:'center', gap:'0.3rem', overflow:'hidden' }}>
+          {/* Badge column — fixed width keeps message aligned; wrap so both badges are always visible */}
+          <div style={{ flexShrink:0, width:BADGE_COL_W, display:'flex', alignItems:'flex-start', gap:'0.3rem', flexWrap:'wrap' }}>
             {alias     && <Badge label={alias}     color={aliasColor} title="Filter by alias"  onClick={() => onFilter?.('alias',alias)} />}
             {groupName && <Badge label={groupName} color={groupColor} title="Filter by group"  onClick={() => onFilter?.('group',groupName)} />}
           </div>
