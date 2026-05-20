@@ -103,7 +103,7 @@ Dead air detection · Live log viewer · System stats · Webhook management · A
 sudo apt update && sudo apt install -y rtl-sdr multimon-ng nodejs npm
 
 # Install
-git clone https://github.com/your-username/pagermonitor.git ~/pagermonitor
+git clone https://github.com/dj3ky/pagermonitor.git ~/pagermonitor
 cd ~/pagermonitor && bash install.sh
 
 # Configure frequency
@@ -119,7 +119,7 @@ Open `http://<pi-ip>:3000` · Login: **admin** / **admin123** · Change password
 ### Docker (any machine)
 
 ```bash
-git clone https://github.com/your-username/pagermonitor.git
+git clone https://github.com/dj3ky/pagermonitor.git
 cd pagermonitor
 make setup        # creates .env from template
 nano .env         # set your frequency
