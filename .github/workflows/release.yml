@@ -80,7 +80,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           ARCHIVE_NAME="pagermonitor"
-          
+
           # Create staging directory with clean structure
           mkdir -p "dist/${ARCHIVE_NAME}"
 
@@ -115,11 +115,11 @@ jobs:
 
           # Create tar.gz
           cd dist
-          tar -czf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}/"
-          zip -r   "${ARCHIVE_NAME}.zip"    "${ARCHIVE_NAME}/"
+          tar -czf "${ARCHIVE_NAME}-v${VERSION}.tar.gz" "${ARCHIVE_NAME}/"
+          zip -r   "${ARCHIVE_NAME}-v${VERSION}.zip"    "${ARCHIVE_NAME}/"
 
           echo "📦 Created:"
-          ls -lh "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}.zip"
+          ls -lh "${ARCHIVE_NAME}-v${VERSION}.tar.gz" "${ARCHIVE_NAME}.zip"
 
       # ── 8. Extract changelog for this version ───────────────────────────────
       - name: Extract changelog entry
