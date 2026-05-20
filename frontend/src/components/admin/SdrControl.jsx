@@ -11,13 +11,13 @@ const api  = (m, p, b) => fetch(`${BASE}${p}`, {
 
 const DONGLE_DEFAULTS = { device:'0', freq:'173.250M', gain:'40', ppm:'0', squelch:'0', protocols:'POCSAG1200', charset:'' };
 const DONGLE_FIELDS = [
-  { key:'device',    label:'Device index',  hint:'0 = first dongle, 1 = second, ...' },
-  { key:'freq',      label:'Frequency',     hint:'e.g. 173.250M' },
-  { key:'gain',      label:'Gain (dB)',      hint:'0 = auto AGC' },
-  { key:'ppm',       label:'PPM',           hint:'Frequency correction' },
-  { key:'squelch',   label:'Squelch',       hint:'0 = disabled' },
-  { key:'protocols', label:'Protocols',     hint:'POCSAG512 POCSAG1200 POCSAG2400 FLEX' },
-  { key:'charset',   label:'Charset',       hint:'e.g. ISO-8859-2 for Slovenian' },
+  { key:'device',    label:'Device index', hint:'0 = first dongle, 1 = second, …', group:'rtl' },
+  { key:'freq',      label:'Frequency',    hint:'e.g. 173.250M or 173.250M:152.240M', group:'rtl' },
+  { key:'gain',      label:'Gain (dB)',    hint:'0 = auto AGC, 40 = typical', group:'rtl' },
+  { key:'ppm',       label:'PPM',          hint:'Frequency correction (run rtl_test -p)', group:'rtl' },
+  { key:'squelch',   label:'Squelch',      hint:'0 = disabled', group:'rtl' },
+  { key:'protocols', label:'Protocols',    hint:'POCSAG512 POCSAG1200 POCSAG2400 FLEX', group:'mmon' },
+  { key:'charset',   label:'Charset',      hint:'ISO-8859-2 for Slovenian (Š Č Ž), leave empty for default', group:'mmon' },
 ];
 
 const FIELD_GROUPS = [
@@ -245,10 +245,13 @@ export default function SdrControl({ sdrStatus }) {
                   <div key={i} style={{ marginBottom:'0.75rem', padding:'0.6rem 0.75rem',
                     background:'var(--bg-0)', borderRadius:'0.5rem',
                     border:'1px solid var(--border-soft)' }}>
+                    {/* Card header */}
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-                      marginBottom:'0.5rem' }}>
+                      marginBottom:'0.6rem' }}>
                       <span style={{ fontFamily:'monospace', fontSize:'0.78rem', fontWeight:700,
-                        color:'var(--accent-blue)' }}>Dongle {i} — device index {d.device}</span>
+                        color:'var(--accent-blue)' }}>
+                        Dongle {i} — device {d.device}
+                      </span>
                       {dongles.length > 1 && (
                         <button className="pm-btn pm-btn-danger" onClick={() => removeDongle(i)}
                           style={{ padding:'0.15rem 0.4rem' }}>
@@ -256,11 +259,37 @@ export default function SdrControl({ sdrStatus }) {
                         </button>
                       )}
                     </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.4rem' }}>
-                      {DONGLE_FIELDS.map(f => (
+
+                    {/* rtl_fm settings */}
+                    <div style={{ fontSize:'0.68rem', fontWeight:600, color:'var(--text-3)',
+                      textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.35rem' }}>
+                      rtl_fm
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.4rem',
+                      marginBottom:'0.65rem' }}>
+                      {DONGLE_FIELDS.filter(f => f.group === 'rtl').map(f => (
                         <div key={f.key}>
                           <label className="pm-label">{f.label}</label>
-                          <input className="pm-input" value={d[f.key] || ''}
+                          <input className="pm-input" value={d[f.key] ?? ''}
+                            onChange={e => updateDongle(i, f.key, e.target.value)}
+                            placeholder={f.hint} />
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* divider */}
+                    <div style={{ height:'1px', background:'var(--border-soft)', margin:'0.5rem 0' }}/>
+
+                    {/* multimon-ng settings */}
+                    <div style={{ fontSize:'0.68rem', fontWeight:600, color:'var(--text-3)',
+                      textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.35rem' }}>
+                      multimon-ng
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.4rem' }}>
+                      {DONGLE_FIELDS.filter(f => f.group === 'mmon').map(f => (
+                        <div key={f.key}>
+                          <label className="pm-label">{f.label}</label>
+                          <input className="pm-input" value={d[f.key] ?? ''}
                             onChange={e => updateDongle(i, f.key, e.target.value)}
                             placeholder={f.hint} />
                         </div>
