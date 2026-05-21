@@ -48,7 +48,7 @@ const FIELD_GROUPS = [
       { key: 'MULTIMON_QUIET',           label: 'Quiet mode (-q)',          hint: '1=on (suppress banner) 0=off' },
       { key: 'MULTIMON_INPUT_FORMAT',    label: 'Input format (-t)',        hint: 'raw | wav | au | aiff  (always raw with rtl_fm)' },
       { key: 'MULTIMON_POCSAG_SPECIAL',  label: 'POCSAG special (-s)',      hint: '1=decode numeric as special 0=off' },
-      { key: 'MULTIMON_POCSAG_CHARSET',  label: 'POCSAG charset (-C)',      hint: 'e.g. ISO-8859-2 for Slovenian Š Č Ž — leave empty for default' },
+      { key: 'MULTIMON_POCSAG_CHARSET',  label: 'POCSAG charset (-C)',      hint: 'Possible values: US,FR,DE,DK,SE,SI' },
     ],
   },
 ];

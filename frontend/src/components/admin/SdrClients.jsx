@@ -15,7 +15,7 @@ const CFG_FIELDS = [
   { key:'ppm',        label:'PPM',           placeholder:'0',        hint:'Frequency correction' },
   { key:'squelch',    label:'Squelch',       placeholder:'0',        hint:'0 = disabled' },
   { key:'protocols',  label:'Protocols',     placeholder:'POCSAG1200', hint:'Space-separated: POCSAG512 POCSAG1200 POCSAG2400 FLEX' },
-  { key:'charset',    label:'Charset (-C)',  placeholder:'',         hint:'e.g. ISO-8859-2 for Slovenian Š Č Ž' },
+  { key:'charset',    label:'Charset (-C)',  placeholder:'',         hint:'Possible values: US,FR,DE,DK,SE,SI' },
 ];
 
 function fmtTime(ts) {

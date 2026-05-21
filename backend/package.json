@@ -1,7 +1,7 @@
 {
-  "name": "pagemon-backend",
+  "name": "pagermonitor-backend",
   "version": "2.1.0",
-  "description": "PageMon real-time pager monitoring backend",
+  "description": "PagerMonitor real-time pager monitoring backend",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
