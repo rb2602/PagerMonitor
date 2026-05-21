@@ -2,6 +2,7 @@
 
 const logger = require('../utils/logger');
 const { getNotifConfig, saveNotifConfig, getNotifFilter } = require('./config');
+const { sendMqtt } = require('./mqtt');
 
 let config = null;
 function ensureConfig() { if (!config) config = getNotifConfig(); return config; }
@@ -11,12 +12,13 @@ const NOTIF_DEFAULTS = {
   telegram:  { enabled: false, token: '', chatId: '' },
   gotify:    { enabled: false, url: '', token: '', priority: 5 },
   pushover:  { enabled: false, token: '', userKey: '', priority: 0, sound: 'default' },
+  mqtt:      { enabled: false, broker: '', topic: 'pagermonitor/messages' },
 };
 
 function sanitiseConfig(raw) {
   if (!raw || typeof raw !== 'object') return JSON.parse(JSON.stringify(NOTIF_DEFAULTS));
   const out = {};
-  for (const svc of ['discord', 'telegram', 'gotify', 'pushover']) {
+  for (const svc of ['discord', 'telegram', 'gotify', 'pushover', 'mqtt']) {
     const src = (raw[svc] && typeof raw[svc] === 'object') ? raw[svc] : {};
     out[svc]  = { ...NOTIF_DEFAULTS[svc], ...src };
   }
@@ -27,7 +29,7 @@ function getConfig() { return sanitiseConfig(ensureConfig()); }
 function updateConfig(patch) {
   const current = sanitiseConfig(ensureConfig());
   const next = { ...current };
-  for (const svc of ['discord', 'telegram', 'gotify', 'pushover']) {
+  for (const svc of ['discord', 'telegram', 'gotify', 'pushover', 'mqtt']) {
     if (patch[svc] && typeof patch[svc] === 'object') next[svc] = { ...current[svc], ...patch[svc] };
   }
   config = next;
@@ -184,6 +186,7 @@ async function sendNotifications(msg) {
   if (c.telegram?.enabled && c.telegram?.token && c.telegram?.chatId)   tasks.push(sendTelegram(msg,  c.telegram));
   if (c.gotify?.enabled   && c.gotify?.url     && c.gotify?.token)      tasks.push(sendGotify(msg,    c.gotify));
   if (c.pushover?.enabled && c.pushover?.token && c.pushover?.userKey)  tasks.push(sendPushover(msg,  c.pushover));
+  if (c.mqtt?.enabled     && c.mqtt?.broker)                            tasks.push(sendMqtt(msg,      c.mqtt));
   if (tasks.length) await Promise.allSettled(tasks);
 }
 
@@ -202,6 +205,7 @@ async function testNotification(service) {
     case 'telegram': return sendTelegram(dummy,  c.telegram);
     case 'gotify':   return sendGotify(dummy,    c.gotify);
     case 'pushover': return sendPushover(dummy,  c.pushover);
+    case 'mqtt':     return sendMqtt(dummy,      c.mqtt);
     default: throw new Error(`Unknown service: ${service}`);
   }
 }

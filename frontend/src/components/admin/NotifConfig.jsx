@@ -8,12 +8,13 @@ const DEFAULTS = {
   telegram:  { enabled: false, token: '', chatId: '' },
   gotify:    { enabled: false, url: '', token: '', priority: 5 },
   pushover:  { enabled: false, token: '', userKey: '', priority: 0, sound: 'default' },
+  mqtt:      { enabled: false, broker: '', topic: 'pagermonitor/messages' },
 };
 
 function sanitise(raw) {
   if (!raw || typeof raw !== 'object') return structuredClone(DEFAULTS);
   const out = {};
-  for (const svc of ['discord', 'telegram', 'gotify', 'pushover']) {
+  for (const svc of ['discord', 'telegram', 'gotify', 'pushover', 'mqtt']) {
     const src = (raw[svc] && typeof raw[svc] === 'object') ? raw[svc] : {};
     out[svc]  = { ...DEFAULTS[svc], ...src };
   }
@@ -110,6 +111,10 @@ const FIELDS = {
     { key: 'priority', label: 'Priority',   hint: '-2 silent  -1 quiet  0 normal  1 high  2 emergency', secret: false },
     { key: 'sound',    label: 'Sound',      hint: 'pushover, bike, bugle, magic, none, … (leave empty for default)', secret: false },
   ],
+  mqtt: [
+    { key: 'broker', label: 'Broker URL', hint: 'mqtt://192.168.1.100:1883', secret: false },
+    { key: 'topic',  label: 'Topic',      hint: 'pagermonitor/messages',     secret: false },
+  ],
 };
 
 const SERVICE_META = [
@@ -117,6 +122,7 @@ const SERVICE_META = [
   { svc: 'telegram', title: 'Telegram', icon: '✈️',  color: 'var(--accent-blue)'   },
   { svc: 'gotify',   title: 'Gotify',   icon: '🔔', color: 'var(--accent-green)'  },
   { svc: 'pushover', title: 'Pushover', icon: '📲', color: 'var(--accent-amber)'  },
+  { svc: 'mqtt',     title: 'MQTT',     icon: '📡', color: 'var(--accent-green)'  },
 ];
 
 export default function NotifConfig() {
