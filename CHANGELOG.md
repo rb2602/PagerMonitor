@@ -11,6 +11,22 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ---
 
+## [2.2.0] — 2026-05-21
+
+### Added
+- **PWA (Progressive Web App)** — installable on Android, iOS, and desktop Chrome/Edge. Add to home screen for a native app feel with standalone window and no browser bar
+- **Background push notifications** — browser/OS-level notifications delivered even when the app is closed. Uses Web Push API with VAPID keys (auto-generated on first start, stored in DB)
+- **Service worker** — caches the app shell for faster loads; network-first for API calls
+- **PWA icons** — 192×192 and 512×512 PNG icons auto-generated from `favicon.svg` as part of `npm run build`
+- **Bell button now dual-purpose** — enabling browser notifications also subscribes the device to background push. Disabling unsubscribes
+
+### Notes
+- VAPID keys are generated automatically on first backend start and stored in the database — no manual configuration needed
+- Push subscriptions are stored per-user; guest/public users cannot subscribe
+- Push respects the existing global notification filter (Admin → Notifications → Filter)
+
+---
+
 ## [2.1.0] — 2026-05-20
 
 ### Added

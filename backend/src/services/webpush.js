@@ -59,7 +59,8 @@ async function _send(sub, payload) {
   try {
     await webpush.sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-      JSON.stringify(payload)
+      JSON.stringify(payload),
+      { TTL: 3600 }  // discard if not delivered within 1 hour
     );
   } catch (err) {
     if (err.statusCode === 410 || err.statusCode === 404) {

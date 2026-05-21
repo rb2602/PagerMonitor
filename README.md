@@ -9,6 +9,7 @@
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![SQLite](https://img.shields.io/badge/SQLite-FTS5-003B57?logo=sqlite&logoColor=white)](https://sqlite.org)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](DOCKER.md)
+[![PWA](https://img.shields.io/badge/PWA-ready-5A0FC8?logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
 
 *Plug in an RTL-SDR dongle, set your frequency, and get a live dashboard of every pager message on the air.*
 
@@ -61,6 +62,7 @@ RTL-SDR dongle → rtl_fm → multimon-ng → Node.js → Browser (WebSocket)
 ### 🔔 Notifications
 | Service | Features |
 |---|---|
+| **Browser push** | OS-level notification on any subscribed device, even with the app closed |
 | **Discord** | Rich embeds — alias, group, Google Maps link |
 | **Telegram** | MarkdownV2 formatted, inline Maps link |
 | **Gotify** | Self-hosted push, any priority |
@@ -69,6 +71,12 @@ RTL-SDR dongle → rtl_fm → multimon-ng → Node.js → Browser (WebSocket)
 | **Webhooks** | HTTP POST to any endpoint, HMAC-SHA256 signed |
 
 **Per-user notification filters** — each user independently filters by group, alias, capcode, or keyword. Set your own preferences from the profile panel.
+
+### 📲 PWA — installable app
+Install PagerMonitor directly to your home screen on Android, iOS, or desktop. No app store needed.
+- Standalone window — no browser bar, feels like a native app
+- Background push notifications — alerted even when the phone is locked or the app is closed
+- Click the **bell icon** in the header to enable — automatically subscribes the device to push
 
 ### 👥 Multi-user access
 | Role | Access |
@@ -195,7 +203,7 @@ Multiple RPi clients can connect to the same server.
 | Database | SQLite with FTS5 full-text search |
 | Frontend | React 18, Vite, Leaflet (maps) |
 | Auth | bcrypt, Bearer token sessions |
-| Notifications | node-fetch, nodemailer |
+| Notifications | node-fetch, nodemailer, web-push (VAPID) |
 | Process | systemd (native) or Docker Compose |
 
 No external services required. Everything runs locally.
