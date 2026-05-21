@@ -26,7 +26,7 @@ function LogLine({ entry }) {
 export default function LogViewer() {
   const [logs, setLogs]     = useState([]);
   const [paused, setPaused] = useState(false);
-  const bottomRef           = useRef(null);
+  const scrollBoxRef        = useRef(null);
   const pausedRef           = useRef(false);
   pausedRef.current = paused;
 
@@ -47,9 +47,11 @@ export default function LogViewer() {
     return unsub; // unsubscribes cleanly when component unmounts
   }, []);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom within the log box only
   useEffect(() => {
-    if (!paused) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!paused && scrollBoxRef.current) {
+      scrollBoxRef.current.scrollTop = scrollBoxRef.current.scrollHeight;
+    }
   }, [logs, paused]);
 
   return (
@@ -74,7 +76,7 @@ export default function LogViewer() {
         </div>
       </div>
 
-      <div style={{
+      <div ref={scrollBoxRef} style={{
         flex: 1, overflow: 'hidden auto', background: 'var(--bg-0)',
         border: '1px solid var(--border)', borderRadius: '0.5rem',
         padding: '0.5rem 0.75rem', minHeight: '200px',
@@ -85,7 +87,6 @@ export default function LogViewer() {
             </div>
           : logs.map((e, i) => <LogLine key={i} entry={e} />)
         }
-        <div ref={bottomRef} />
       </div>
 
       <div style={{ marginTop: '0.4rem', fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>
