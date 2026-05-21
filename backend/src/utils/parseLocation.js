@@ -21,15 +21,47 @@ function valid(lat, lng) {
   return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
 
+const PUNCT_ONLY = /^[-–—,;:.()\[\]/\\]+$/;
+
 function suffixCandidates(text, countryCode = 'si') {
   const country = COUNTRY_NAMES[countryCode] || countryCode.toUpperCase();
   const words = text.trim().split(/\s+/);
-  const candidates = [];
-  for (let i = 0; i < words.length - 1; i++) {
-    const suffix = words.slice(i).join(' ');
-    if (/\d/.test(suffix)) candidates.push(`${suffix}, ${country}`);
+
+  // Find the rightmost standalone house number (digits + optional single trailing letter)
+  let numIdx = -1;
+  for (let i = words.length - 1; i >= 0; i--) {
+    if (/^\d+[a-zA-Z]?$/.test(words[i])) { numIdx = i; break; }
   }
-  return candidates;
+  if (numIdx < 1) return [];
+
+  // Collect up to 6 non-punctuation word indices before the number, closest-first
+  const prev = [];
+  for (let i = numIdx - 1; i >= 0 && prev.length < 6; i--) {
+    if (!PUNCT_ONLY.test(words[i])) prev.push(i);
+  }
+  if (prev.length === 0) return [];
+
+  // Build a phrase from startIdx up to and including the house number, dropping punctuation
+  const phrase = (start) =>
+    words.slice(start, numIdx + 1).filter(w => !PUNCT_ONLY.test(w)).join(' ');
+
+  const results = [];
+  const seen   = new Set();
+  const push   = (q) => { if (q && !seen.has(q)) { seen.add(q); results.push(q); } };
+
+  for (let n = 1; n <= prev.length; n++) {
+    push(`${phrase(prev[n - 1])}, ${country}`);
+
+    // At 3 words before the number, also try "street+number, town, country" format —
+    // Nominatim resolves this more reliably than "town street number, country"
+    if (n === 3) {
+      const town      = words[prev[n - 1]];
+      const streetNum = phrase(prev[n - 2]);
+      push(`${streetNum}, ${town}, ${country}`);
+    }
+  }
+
+  return results;
 }
 
 function parseLocation(text, countryCode = 'si') {
@@ -79,7 +111,7 @@ function _enqueue(work) {
 }
 
 async function geocodeAddress(candidates, countryCode = 'si') {
-  const queries = (Array.isArray(candidates) ? candidates : [candidates].filter(Boolean)).slice(0, 3);
+  const queries = Array.isArray(candidates) ? candidates : [candidates].filter(Boolean);
 
   for (const query of queries) {
     if (!query?.trim()) continue;
