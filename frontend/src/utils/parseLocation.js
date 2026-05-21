@@ -84,32 +84,56 @@ export function parseLocation(text, countryCode = 'si') {
   return null;
 }
 
-// ── Geocoder (Nominatim) ──────────────────────────────────────────────────────
+// ── Rate-limited Nominatim geocoder ──────────────────────────────────────────
+// All requests share one serial queue — prevents 429s when many messages arrive.
+const _geoCache = new Map();
+let   _geoChain = Promise.resolve();
+
+function _enqueue(work) {
+  const slot = _geoChain.then(work);
+  _geoChain = slot.then(() => new Promise(r => setTimeout(r, 1100)),
+                         () => new Promise(r => setTimeout(r, 1100)));
+  return slot;
+}
+
 export async function geocodeAddress(loc, countryCode = 'si') {
-  const queries = typeof loc === 'object' && loc?.candidates
+  const raw = typeof loc === 'object' && loc?.candidates
     ? loc.candidates
     : [typeof loc === 'string' ? loc : loc?.geoQuery || loc?.raw].filter(Boolean);
+  const queries = raw.slice(0, 3);
 
   for (const query of queries) {
     if (!query?.trim()) continue;
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?` +
-        `q=${encodeURIComponent(query)}&countrycode=${countryCode}&format=json&limit=1`;
-      const r    = await fetch(url, {
-        headers: { 'Accept-Language': 'sl,en', 'User-Agent': 'PagerMonitor/2.1' },
-      });
-      const data = await r.json();
-      if (data?.length > 0) {
-        return {
-          lat:     parseFloat(data[0].lat),
-          lng:     parseFloat(data[0].lon),
-          display: data[0].display_name,
-          query,
+    const key = `${query}|${countryCode}`;
+    if (_geoCache.has(key)) return _geoCache.get(key);
+
+    const result = await _enqueue(async () => {
+      if (_geoCache.has(key)) return _geoCache.get(key);
+      const ctrl  = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?` +
+          `q=${encodeURIComponent(query)}&countrycode=${countryCode}&format=json&limit=1`;
+        const r = await fetch(url, {
+          headers: { 'Accept-Language': 'sl,en', 'User-Agent': 'PagerMonitor/2.1' },
+          signal: ctrl.signal,
+        });
+        if (!r.ok) return null;
+        const data = await r.json();
+        if (data?.length > 0) return {
+          lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon),
+          display: data[0].display_name, query,
         };
-      }
-    } catch (_) {}
-    // Polite delay between Nominatim requests
-    await new Promise(r => setTimeout(r, 300));
+        return null;
+      } catch { return null; }
+      finally { clearTimeout(timer); }
+    });
+
+    if (result) {
+      _geoCache.set(key, result);
+      if (_geoCache.size > 500) _geoCache.delete(_geoCache.keys().next().value);
+      return result;
+    }
   }
   return null;
 }

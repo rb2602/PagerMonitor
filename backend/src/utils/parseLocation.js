@@ -64,30 +64,52 @@ function parseLocation(text, countryCode = 'si') {
   return { lat: null, lng: null };
 }
 
-// Nominatim geocoder — tries each candidate in order, returns first hit
+// ── Rate-limited Nominatim geocoder ──────────────────────────────────────────
+// Nominatim policy: max 1 request/second. All requests share a single serial
+// queue so concurrent message bursts don't trigger 429s.
+const _geoCache = new Map();        // "query|cc" → result  (capped at 500 entries)
+let   _geoChain = Promise.resolve(); // serialises every HTTP request globally
+
+function _enqueue(work) {
+  const slot = _geoChain.then(work);
+  // Hold the queue for 1.1 s after each attempt, success or failure
+  _geoChain = slot.then(() => new Promise(r => setTimeout(r, 1100)),
+                         () => new Promise(r => setTimeout(r, 1100)));
+  return slot;
+}
+
 async function geocodeAddress(candidates, countryCode = 'si') {
-  const queries = Array.isArray(candidates) ? candidates : [candidates].filter(Boolean);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-  try {
-    for (const query of queries) {
-      if (!query?.trim() || controller.signal.aborted) break;
+  const queries = (Array.isArray(candidates) ? candidates : [candidates].filter(Boolean)).slice(0, 3);
+
+  for (const query of queries) {
+    if (!query?.trim()) continue;
+    const key = `${query}|${countryCode}`;
+    if (_geoCache.has(key)) return _geoCache.get(key);
+
+    const result = await _enqueue(async () => {
+      if (_geoCache.has(key)) return _geoCache.get(key); // filled while queued
+      const ctrl  = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
       try {
         const url = `https://nominatim.openstreetmap.org/search?` +
           `q=${encodeURIComponent(query)}&countrycode=${countryCode}&format=json&limit=1`;
         const r = await fetch(url, {
           headers: { 'Accept-Language': 'sl,en', 'User-Agent': 'PagerMonitor/2.1' },
-          signal: controller.signal,
+          signal: ctrl.signal,
         });
+        if (!r.ok) return null;
         const data = await r.json();
-        if (data?.length > 0) {
-          return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), query };
-        }
-      } catch (_) { if (controller.signal.aborted) break; }
-      if (!controller.signal.aborted) await new Promise(r => setTimeout(r, 300));
+        if (data?.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), query };
+        return null;
+      } catch { return null; }
+      finally { clearTimeout(timer); }
+    });
+
+    if (result) {
+      _geoCache.set(key, result);
+      if (_geoCache.size > 500) _geoCache.delete(_geoCache.keys().next().value);
+      return result;
     }
-  } finally {
-    clearTimeout(timer);
   }
   return null;
 }
