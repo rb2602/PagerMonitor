@@ -31,7 +31,7 @@ function Flash({ msg }) {
 }
 
 export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplete, onLocationResolved, visible }) {
-  const { mapDotColor = '#00ff9d', mapMaxAgeDays = 30 } = useSite();
+  const { mapDotColor = '#00ff9d', mapMaxAgeDays = 30, geocodeCountry = 'si' } = useSite();
 
   const mapRef         = useRef(null);
   const mapDivRef      = useRef(null);
@@ -224,7 +224,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
       if (geocodedRef.current.has(msg.id)) return;
 
       // Try to parse an address from the message text
-      const loc = parseLocation(msg.message || '');
+      const loc = parseLocation(msg.message || '', geocodeCountry);
       if (!loc || loc.type !== 'address') return;
 
       // Mark as being geocoded
@@ -232,7 +232,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
       setGeocoding(true);
 
       // Pass full location object so geocodeAddress can use the best query
-      geocodeAddress(loc)
+      geocodeAddress(loc, geocodeCountry)
         .then(result => {
           if (!result) return;
           const enriched = { ...msg, lat: result.lat, lng: result.lng };

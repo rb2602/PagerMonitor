@@ -266,18 +266,19 @@ function parseCsvLine(line) {
 
 // ── Site settings ─────────────────────────────────────────────────────────────
 router.get('/site-settings', adminOnly, (_req, res) => {
-  try { res.json(_gs('site_settings', { siteName:'PagerMonitor', siteDescription:'Real-time pager decoder', newBadgeSeconds:10, mapDotColor:'#00ff9d', showMapButton:true, mapMaxAgeDays:30, publicMode:false })); }
+  try { res.json(_gs('site_settings', { siteName:'PagerMonitor', siteDescription:'Real-time pager decoder', newBadgeSeconds:10, mapDotColor:'#00ff9d', showMapButton:true, mapMaxAgeDays:30, publicMode:false, geocodeCountry:'si' })); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.put('/site-settings', adminOnly, (req, res) => {
   try {
-    const { siteName, siteDescription, newBadgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays, publicMode } = req.body;
+    const { siteName, siteDescription, newBadgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays, publicMode, geocodeCountry } = req.body;
     _ss('site_settings', {
       siteName: siteName || 'PagerMonitor', siteDescription: siteDescription || '',
       newBadgeSeconds: Math.max(3, Math.min(300, parseInt(newBadgeSeconds,10)||10)),
       mapDotColor: mapDotColor || '#00ff9d', showMapButton: showMapButton !== false,
       mapMaxAgeDays: Math.max(1, Math.min(365, parseInt(mapMaxAgeDays,10)||30)),
       publicMode: !!publicMode,
+      geocodeCountry: /^[a-z]{2}$/.test(geocodeCountry) ? geocodeCountry : 'si',
     });
     addAuditLog(req.session?.username||'admin', 'site.settings', `publicMode=${!!publicMode}`);
     res.json({ ok: true });

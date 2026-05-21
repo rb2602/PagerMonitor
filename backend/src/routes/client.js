@@ -12,7 +12,7 @@ const router  = express.Router();
 const { insertMessage, getKeywordAlerts, getSetting } = require('../services/database');
 const { broadcast }             = require('../services/websocket');
 const { resolveAlias }          = require('../utils/aliases');
-const { parseLocation }         = require('../utils/parseLocation');
+const { parseLocation, geocodeAddress } = require('../utils/parseLocation');
 const { sendNotifications }     = require('../services/notifications');
 const { sendWebhooks }          = require('../services/webhooks');
 const { sendUserEmailNotifications } = require('../services/emailNotifier');
@@ -88,7 +88,9 @@ router.post('/message', requireClientKey, (req, res) => {
       }
     } catch (_) {}
 
-    const { lat, lng } = parseLocation(message || '');
+    const geocodeCountry = (getSetting('site_settings', {}).geocodeCountry || 'si');
+    const location = parseLocation(message || '', geocodeCountry);
+    const { lat, lng } = location;
     const ts  = timestamp || new Date().toISOString();
     const msg = {
       timestamp: ts, capcode, protocol, baud, funcbits,
@@ -124,9 +126,21 @@ router.post('/message', requireClientKey, (req, res) => {
       if (matched.length) broadcast({ ...payload, type: 'keyword_alert', matchedAlerts: matched });
     } catch (_) {}
 
-    sendNotifications(payload).catch(e => logger.warn(`Notification: ${e.message}`));
-    sendWebhooks(payload).catch(() => {});
-    sendUserEmailNotifications(payload).catch(() => {});
+    // Geocode address first if no explicit coords, so notifications include a map link
+    ;(async () => {
+      let notifyPayload = payload;
+      if (!lat && location.candidates?.length) {
+        const result = await geocodeAddress(location.candidates, geocodeCountry).catch(() => null);
+        if (result) {
+          try { require('../services/database').getDb().prepare('UPDATE messages SET lat=?, lng=? WHERE id=?').run(result.lat, result.lng, id); } catch (_) {}
+          broadcast({ type: 'message_location', id, lat: result.lat, lng: result.lng });
+          notifyPayload = { ...payload, lat: result.lat, lng: result.lng };
+        }
+      }
+      sendNotifications(notifyPayload).catch(e => logger.warn(`Notification: ${e.message}`));
+      sendWebhooks(notifyPayload).catch(() => {});
+      sendUserEmailNotifications(notifyPayload).catch(() => {});
+    })();
 
     logger.info(`[client:${clientId}] [${protocol}] ${capcode}: ${(message || '').substring(0, 60)}`);
     res.json({ ok: true, id });

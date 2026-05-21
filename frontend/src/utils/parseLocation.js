@@ -1,7 +1,10 @@
-/**
- * Extract location from a Slovenian pager message.
- *
- */
+const COUNTRY_NAMES = {
+  si:'Slovenia', de:'Germany', at:'Austria', it:'Italy', fr:'France',
+  gb:'United Kingdom', nl:'Netherlands', be:'Belgium', ch:'Switzerland',
+  pl:'Poland', cz:'Czech Republic', sk:'Slovakia', hu:'Hungary',
+  hr:'Croatia', rs:'Serbia', ba:'Bosnia and Herzegovina',
+  us:'United States', ca:'Canada', au:'Australia', nz:'New Zealand',
+};
 
 // ── Coordinate patterns ───────────────────────────────────────────────────────
 const DECIMAL_RE = /(-?\d{1,3}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/;
@@ -19,25 +22,19 @@ function validCoord(lat, lng) {
 }
 
 // ── Suffix candidates for Nominatim ──────────────────────────────────────────
-/**
- * Generate word-boundary suffixes of decreasing length.
- */
-function suffixCandidates(text) {
+function suffixCandidates(text, countryCode = 'si') {
+  const country = COUNTRY_NAMES[countryCode] || countryCode.toUpperCase();
   const words = text.trim().split(/\s+/);
   const candidates = [];
-  const hasNumber = s => /\d/.test(s);
-
   for (let i = 0; i < words.length - 1; i++) {
     const suffix = words.slice(i).join(' ');
-    if (hasNumber(suffix)) {
-      candidates.push(`${suffix}, Slovenia`);
-    }
+    if (/\d/.test(suffix)) candidates.push(`${suffix}, ${country}`);
   }
   return candidates;
 }
 
 // ── Main parser ───────────────────────────────────────────────────────────────
-export function parseLocation(text) {
+export function parseLocation(text, countryCode = 'si') {
   if (!text) return null;
 
   // 1. Decimal coords
@@ -72,7 +69,7 @@ export function parseLocation(text) {
 
   // 5. Address — only if message contains a house number
   if (/\d/.test(text)) {
-    const candidates = suffixCandidates(text);
+    const candidates = suffixCandidates(text, countryCode);
     if (candidates.length > 0) {
       return {
         lat: null, lng: null,

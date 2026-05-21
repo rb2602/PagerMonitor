@@ -1,13 +1,13 @@
 const { spawn }  = require('child_process');
 const iconv      = require('iconv-lite');
-const { insertMessage, getKeywordAlerts } = require('./database');
+const { insertMessage, getKeywordAlerts, getSetting } = require('./database');
 const { broadcast }          = require('./websocket');
 const { resolveAlias }       = require('../utils/aliases');
 const { sendNotifications }  = require('./notifications');
 const { sendWebhooks }       = require('./webhooks');
 const { recordMessage }      = require('./deadair');
 const { sendUserEmailNotifications } = require('./emailNotifier');
-const { parseLocation }      = require('../utils/parseLocation');
+const { parseLocation, geocodeAddress } = require('../utils/parseLocation');
 const { loadSdrConfigIntoEnv, getDedupConfig, getDongleConfigs } = require('./config');
 const logger = require('../utils/logger');
 
@@ -381,7 +381,9 @@ function handleLine(line) {
   } catch (_) {}
 
   const timestamp = new Date().toISOString();
-  const { lat, lng } = parseLocation(parsed.message);
+  const geocodeCountry = (getSetting('site_settings', {}).geocodeCountry || 'si');
+  const location = parseLocation(parsed.message, geocodeCountry);
+  const { lat, lng } = location;
   const msg = {
     timestamp, raw: line, ...parsed,
     lat, lng,
@@ -421,9 +423,21 @@ function handleLine(line) {
     if (matched.length) broadcast({ ...payload, type: 'keyword_alert', matchedAlerts: matched });
   } catch (_) {}
 
-  sendNotifications(payload).catch(e => logger.warn(`Notification: ${e.message}`));
-  sendWebhooks(payload).catch(() => {});
-  sendUserEmailNotifications(payload).catch(() => {});
+  // Geocode address first if no explicit coords, so notifications include a map link
+  ;(async () => {
+    let notifyPayload = payload;
+    if (!lat && location.candidates?.length) {
+      const result = await geocodeAddress(location.candidates, geocodeCountry).catch(() => null);
+      if (result) {
+        try { require('./database').getDb().prepare('UPDATE messages SET lat=?, lng=? WHERE id=?').run(result.lat, result.lng, id); } catch (_) {}
+        broadcast({ type: 'message_location', id, lat: result.lat, lng: result.lng });
+        notifyPayload = { ...payload, lat: result.lat, lng: result.lng };
+      }
+    }
+    sendNotifications(notifyPayload).catch(e => logger.warn(`Notification: ${e.message}`));
+    sendWebhooks(notifyPayload).catch(() => {});
+    sendUserEmailNotifications(notifyPayload).catch(() => {});
+  })();
 
   logger.info(`[${msg.protocol}] ${msg.capcode} (${aliasName || 'unknown'}): ${msg.message.substring(0, 80)}`);
 }

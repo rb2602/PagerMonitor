@@ -5,7 +5,7 @@ import { useSite } from '../../context/SiteContext.jsx';
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const getToken = () => localStorage.getItem('pm_token') || '';
 
-const DEFAULTS = { siteName: 'PagerMonitor', siteDescription: 'Real-time pager decoder', newBadgeSeconds: 10, mapDotColor: '#00ff9d', showMapButton: true, mapMaxAgeDays: 30, publicMode: false };
+const DEFAULTS = { siteName: 'PagerMonitor', siteDescription: 'Real-time pager decoder', newBadgeSeconds: 10, mapDotColor: '#00ff9d', showMapButton: true, mapMaxAgeDays: 30, publicMode: false, geocodeCountry: 'si' };
 
 async function fetchSettings() {
   const r = await fetch(`${BASE}/admin/site-settings`, { headers: { Authorization: `Bearer ${getToken()}` } });
@@ -45,6 +45,7 @@ export default function SiteSettings() {
   const [mapDotColor, setMapDotColor]       = useState(DEFAULTS.mapDotColor);
   const [showMapButton, setShowMapButton]   = useState(DEFAULTS.showMapButton);
   const [mapMaxAgeDays, setMapMaxAgeDays]   = useState(DEFAULTS.mapMaxAgeDays);
+  const [geocodeCountry, setGeocodeCountry] = useState(DEFAULTS.geocodeCountry);
   const [publicMode, setPublicMode]         = useState(DEFAULTS.publicMode);
   const [savingMap, setSavingMap]       = useState(false);
   const [mapMsg, setMapMsg]             = useState(null);
@@ -66,6 +67,7 @@ export default function SiteSettings() {
         setMapDotColor(d.mapDotColor || DEFAULTS.mapDotColor);
         setShowMapButton(d.showMapButton !== false);
         setMapMaxAgeDays(d.mapMaxAgeDays ?? DEFAULTS.mapMaxAgeDays);
+        setGeocodeCountry(d.geocodeCountry || DEFAULTS.geocodeCountry);
         setPublicMode(!!d.publicMode);
       })
       .catch(console.warn);
@@ -75,7 +77,7 @@ export default function SiteSettings() {
   const flashBadge = (type, text) => { setBadgeMsg({ type, text }); setTimeout(() => setBadgeMsg(null), 3500); };
   const flashMap   = (type, text) => { setMapMsg({ type, text });   setTimeout(() => setMapMsg(null),   3500); };
 
-  const allSettings = () => ({ ...siteForm, newBadgeSeconds: badgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays, publicMode });
+  const allSettings = () => ({ ...siteForm, newBadgeSeconds: badgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays, geocodeCountry, publicMode });
 
   // Save site name/description only
   const saveSite = async () => {
@@ -242,6 +244,22 @@ export default function SiteSettings() {
               onChange={e => setShowMapButton(e.target.checked)} />
             Show 📍 button on messages that have confirmed coordinates
           </label>
+        </div>
+
+        <div style={{ marginBottom:'1rem' }}>
+          <label className="pm-label">Geocoding country code</label>
+          <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+            <input className="pm-input" value={geocodeCountry}
+              onChange={e => setGeocodeCountry(e.target.value.toLowerCase().replace(/[^a-z]/g, '').slice(0, 2))}
+              placeholder="si" maxLength={2}
+              style={{ width:'60px', textAlign:'center', fontFamily:'monospace', textTransform:'lowercase' }} />
+            <span style={{ fontSize:'0.8rem', color:'var(--text-2)' }}>
+              {geocodeCountry === 'si' ? 'Slovenia' : geocodeCountry === 'de' ? 'Germany' : geocodeCountry === 'at' ? 'Austria' : geocodeCountry === 'hr' ? 'Croatia' : geocodeCountry === 'it' ? 'Italy' : geocodeCountry === 'gb' ? 'United Kingdom' : geocodeCountry === 'us' ? 'United States' : geocodeCountry === 'fr' ? 'France' : geocodeCountry.toUpperCase()}
+            </span>
+          </div>
+          <div style={{ fontSize:'0.72rem', color:'var(--text-3)', marginTop:'0.3rem' }}>
+            2-letter ISO country code used when geocoding addresses from message text (e.g. <code>si</code>, <code>de</code>, <code>hr</code>, <code>at</code>).
+          </div>
         </div>
 
         <div>
