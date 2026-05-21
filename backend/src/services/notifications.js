@@ -2,7 +2,7 @@
 
 const logger = require('../utils/logger');
 const { getNotifConfig, saveNotifConfig, getNotifFilter } = require('./config');
-const { sendMqtt } = require('./mqtt');
+const { sendMqtt, disconnectMqtt } = require('./mqtt');
 
 let config = null;
 function ensureConfig() { if (!config) config = getNotifConfig(); return config; }
@@ -31,6 +31,11 @@ function updateConfig(patch) {
   const next = { ...current };
   for (const svc of ['discord', 'telegram', 'gotify', 'pushover', 'mqtt']) {
     if (patch[svc] && typeof patch[svc] === 'object') next[svc] = { ...current[svc], ...patch[svc] };
+  }
+  if (patch.mqtt) {
+    const brokerChanged = patch.mqtt.broker !== undefined && patch.mqtt.broker !== current.mqtt?.broker;
+    const disabled = patch.mqtt.enabled === false;
+    if (brokerChanged || disabled) disconnectMqtt();
   }
   config = next;
   saveNotifConfig(config);

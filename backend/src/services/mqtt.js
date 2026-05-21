@@ -33,4 +33,11 @@ async function sendMqtt(msg, cfg) {
   );
 }
 
-module.exports = { sendMqtt };
+function disconnectMqtt() {
+  for (const [broker, c] of clients) {
+    try { c.end(true); } catch (_) {}
+    clients.delete(broker);
+  }
+}
+
+module.exports = { sendMqtt, disconnectMqtt };
