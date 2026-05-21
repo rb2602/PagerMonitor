@@ -19,6 +19,7 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Service worker** — caches the app shell for faster loads; network-first for API calls
 - **PWA icons** — 192×192 and 512×512 PNG icons auto-generated from `favicon.svg` as part of `npm run build`
 - **Bell button now dual-purpose** — enabling browser notifications also subscribes the device to background push. Disabling unsubscribes
+- **Minor bug fixes**
 
 ### Notes
 - VAPID keys are generated automatically on first backend start and stored in the database — no manual configuration needed

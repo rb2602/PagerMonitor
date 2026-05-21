@@ -98,10 +98,10 @@ export default function Header({ wsStatus, soundEnabled, onToggleSound, browserN
               <IconBtn
                 title={
                   browserNotif.permission === 'denied'
-                    ? 'Browser notifications blocked — allow in browser settings'
+                    ? 'Browser/push notifications blocked — allow in browser settings'
                     : browserNotif.enabled
-                      ? 'Browser notifications ON — click to disable'
-                      : 'Enable browser notifications (OS popups)'
+                      ? 'Browser/push notifications ON — click to disable'
+                      : 'Enable browser/push notifications (OS popups)'
                 }
                 onClick={browserNotif.toggle}
                 active={browserNotif.enabled}
