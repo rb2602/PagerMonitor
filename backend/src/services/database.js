@@ -176,14 +176,29 @@ function _migrate() {
     CREATE INDEX IF NOT EXISTS idx_notes_message ON message_notes(message_id);
 
     CREATE TABLE IF NOT EXISTS user_notif_prefs (
-      user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      enabled     INTEGER NOT NULL DEFAULT 0,
-      mode        TEXT    NOT NULL DEFAULT 'all',
-      group_ids   TEXT    NOT NULL DEFAULT '[]',
-      capcodes    TEXT    NOT NULL DEFAULT '[]',
-      keywords    TEXT    NOT NULL DEFAULT '[]'
+      user_id          INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      enabled          INTEGER NOT NULL DEFAULT 0,
+      mode             TEXT    NOT NULL DEFAULT 'all',
+      group_ids        TEXT    NOT NULL DEFAULT '[]',
+      capcodes         TEXT    NOT NULL DEFAULT '[]',
+      keywords         TEXT    NOT NULL DEFAULT '[]',
+      push_enabled     INTEGER NOT NULL DEFAULT 0,
+      push_mode        TEXT    NOT NULL DEFAULT 'all',
+      push_group_ids   TEXT    NOT NULL DEFAULT '[]',
+      push_capcodes    TEXT    NOT NULL DEFAULT '[]',
+      push_keywords    TEXT    NOT NULL DEFAULT '[]'
     )
   `);
+
+  const prefCols = db.prepare('PRAGMA table_info(user_notif_prefs)').all().map(c => c.name);
+  if (!prefCols.includes('push_enabled')) {
+    db.exec('ALTER TABLE user_notif_prefs ADD COLUMN push_enabled   INTEGER NOT NULL DEFAULT 0');
+    db.exec('ALTER TABLE user_notif_prefs ADD COLUMN push_mode      TEXT    NOT NULL DEFAULT \'all\'');
+    db.exec('ALTER TABLE user_notif_prefs ADD COLUMN push_group_ids TEXT    NOT NULL DEFAULT \'[]\'');
+    db.exec('ALTER TABLE user_notif_prefs ADD COLUMN push_capcodes  TEXT    NOT NULL DEFAULT \'[]\'');
+    db.exec('ALTER TABLE user_notif_prefs ADD COLUMN push_keywords  TEXT    NOT NULL DEFAULT \'[]\'');
+    logger.info('Migration: added push columns to user_notif_prefs');
+  }
 
   const msgColumns = db.prepare("PRAGMA table_info(messages)").all().map(c => c.name);
   if (!msgColumns.includes('lat')) {
@@ -364,28 +379,45 @@ function updateUserEmail(id, email) { getDb().prepare('UPDATE users SET email=? 
 // Per-user notification preferences
 function getUserNotifPrefs(userId) {
   const row = getDb().prepare('SELECT * FROM user_notif_prefs WHERE user_id=?').get(userId);
-  if (!row) return { enabled:false, mode:'all', group_ids:[], capcodes:[], keywords:[] };
+  if (!row) return {
+    enabled: false, mode: 'all', group_ids: [], capcodes: [], keywords: [],
+    push_enabled: false, push_mode: 'all', push_group_ids: [], push_capcodes: [], push_keywords: [],
+  };
   return {
-    enabled:   !!row.enabled,
-    mode:      row.mode,
-    group_ids: JSON.parse(row.group_ids || '[]'),
-    capcodes:  JSON.parse(row.capcodes  || '[]'),
-    keywords:  JSON.parse(row.keywords  || '[]'),
+    enabled:        !!row.enabled,
+    mode:           row.mode,
+    group_ids:      JSON.parse(row.group_ids      || '[]'),
+    capcodes:       JSON.parse(row.capcodes       || '[]'),
+    keywords:       JSON.parse(row.keywords       || '[]'),
+    push_enabled:   !!row.push_enabled,
+    push_mode:      row.push_mode || 'all',
+    push_group_ids: JSON.parse(row.push_group_ids || '[]'),
+    push_capcodes:  JSON.parse(row.push_capcodes  || '[]'),
+    push_keywords:  JSON.parse(row.push_keywords  || '[]'),
   };
 }
 
 function setUserNotifPrefs(userId, prefs) {
   getDb().prepare(`
-    INSERT INTO user_notif_prefs (user_id, enabled, mode, group_ids, capcodes, keywords)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO user_notif_prefs
+      (user_id, enabled, mode, group_ids, capcodes, keywords,
+       push_enabled, push_mode, push_group_ids, push_capcodes, push_keywords)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       enabled=excluded.enabled, mode=excluded.mode,
-      group_ids=excluded.group_ids, capcodes=excluded.capcodes, keywords=excluded.keywords
+      group_ids=excluded.group_ids, capcodes=excluded.capcodes, keywords=excluded.keywords,
+      push_enabled=excluded.push_enabled, push_mode=excluded.push_mode,
+      push_group_ids=excluded.push_group_ids, push_capcodes=excluded.push_capcodes,
+      push_keywords=excluded.push_keywords
   `).run(userId,
     prefs.enabled ? 1 : 0, prefs.mode || 'all',
-    JSON.stringify(prefs.group_ids || []),
-    JSON.stringify(prefs.capcodes  || []),
-    JSON.stringify(prefs.keywords  || []),
+    JSON.stringify(prefs.group_ids      || []),
+    JSON.stringify(prefs.capcodes       || []),
+    JSON.stringify(prefs.keywords       || []),
+    prefs.push_enabled ? 1 : 0, prefs.push_mode || 'all',
+    JSON.stringify(prefs.push_group_ids || []),
+    JSON.stringify(prefs.push_capcodes  || []),
+    JSON.stringify(prefs.push_keywords  || []),
   );
 }
 

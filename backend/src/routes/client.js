@@ -17,6 +17,7 @@ const { parseLocation, geocodeAddress } = require('../utils/parseLocation');
 const { sendNotifications }     = require('../services/notifications');
 const { sendWebhooks }          = require('../services/webhooks');
 const { sendUserEmailNotifications } = require('../services/emailNotifier');
+const { sendPushPerUser }       = require('../services/webpush');
 const { recordMessage }         = require('../services/deadair');
 const { recordClientMessage, recordClientPing, getClientConfig } = require('../services/clientTracker');
 const { getDedupConfig }        = require('../services/config');
@@ -141,6 +142,7 @@ router.post('/message', requireClientKey, (req, res) => {
       sendNotifications(notifyPayload).catch(e => logger.warn(`Notification: ${e.message}`));
       sendWebhooks(notifyPayload).catch(() => {});
       sendUserEmailNotifications(notifyPayload).catch(() => {});
+      sendPushPerUser(notifyPayload).catch(() => {});
     })();
 
     logger.info(`[client:${clientId}] [${protocol}] ${capcode}: ${(message || '').substring(0, 60)}`);

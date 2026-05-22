@@ -7,6 +7,7 @@ const { sendNotifications }  = require('./notifications');
 const { sendWebhooks }       = require('./webhooks');
 const { recordMessage }      = require('./deadair');
 const { sendUserEmailNotifications } = require('./emailNotifier');
+const { sendPushPerUser }    = require('./webpush');
 const { parseLocation, geocodeAddress } = require('../utils/parseLocation');
 const { loadSdrConfigIntoEnv, getDedupConfig, getDongleConfigs } = require('./config');
 const logger = require('../utils/logger');
@@ -437,6 +438,7 @@ function handleLine(line) {
     sendNotifications(notifyPayload).catch(e => logger.warn(`Notification: ${e.message}`));
     sendWebhooks(notifyPayload).catch(() => {});
     sendUserEmailNotifications(notifyPayload).catch(() => {});
+    sendPushPerUser(notifyPayload).catch(() => {});
   })();
 
   logger.info(`[${msg.protocol}] ${msg.capcode} (${aliasName || 'unknown'}): ${msg.message.substring(0, 80)}`);

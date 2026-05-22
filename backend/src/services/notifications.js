@@ -3,7 +3,6 @@
 const logger = require('../utils/logger');
 const { getNotifConfig, saveNotifConfig, getNotifFilter } = require('./config');
 const { sendMqtt, disconnectMqtt } = require('./mqtt');
-const { sendPushToAll } = require('./webpush');
 
 let config = null;
 function ensureConfig() { if (!config) config = getNotifConfig(); return config; }
@@ -46,9 +45,15 @@ function passesFilter(msg) {
   try {
     const filter = getNotifFilter();
     if (!filter || filter.mode === 'all') return true;
-    if (filter.mode === 'filtered') {
-      const capcodes = Array.isArray(filter.capcodes) ? filter.capcodes : [];
-      return capcodes.includes(msg.capcode);
+    if (filter.mode === 'groups') {
+      return msg.group_id != null && filter.group_ids.includes(Number(msg.group_id));
+    }
+    if (filter.mode === 'aliases' || filter.mode === 'capcodes') {
+      return filter.capcodes.includes(msg.capcode);
+    }
+    if (filter.mode === 'keywords') {
+      const text = (msg.message || '').toLowerCase();
+      return filter.keywords.some(kw => kw && text.includes(kw.toLowerCase()));
     }
     return true;
   } catch (_) { return true; }
@@ -193,15 +198,6 @@ async function sendNotifications(msg) {
   if (c.gotify?.enabled   && c.gotify?.url     && c.gotify?.token)      tasks.push(sendGotify(msg,    c.gotify));
   if (c.pushover?.enabled && c.pushover?.token && c.pushover?.userKey)  tasks.push(sendPushover(msg,  c.pushover));
   if (c.mqtt?.enabled     && c.mqtt?.broker)                            tasks.push(sendMqtt(msg,      c.mqtt));
-  // Browser/PWA push notifications
-  const alias = msg.alias_name || msg.alias || msg.capcode;
-  tasks.push(sendPushToAll({
-    title: `📟 ${alias}`,
-    body:  msg.message || '(tone / numeric only)',
-    tag:   `pm-${msg.capcode}`,
-    data:  { capcode: msg.capcode, timestamp: msg.timestamp },
-  }));
-
   await Promise.allSettled(tasks);
 }
 
