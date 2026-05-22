@@ -6,6 +6,7 @@
 
 'use strict';
 
+const { version } = require('../../package.json');
 const express = require('express');
 const router  = express.Router();
 
@@ -155,7 +156,7 @@ router.post('/message', requireClientKey, (req, res) => {
 router.get('/status', requireClientKey, (req, res) => {
   const clientId = req.headers['x-client-id'] || 'unknown';
   recordClientPing(clientId, req.ip);
-  res.json({ ok: true, server: 'PagerMonitor', version: '2.0.0' });
+  res.json({ ok: true, server: 'PagerMonitor', version });
 });
 
 // GET /client/config — client polls for remote config changes

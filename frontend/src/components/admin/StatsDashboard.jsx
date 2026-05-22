@@ -61,7 +61,7 @@ export default function StatsDashboard() {
           ? <div style={{color:'var(--text-3)',fontSize:'0.8rem'}}>No messages in last 30 days</div>
           : stats.daily.map(r=>(
             <Bar key={r.day} value={r.n} max={maxDaily}
-              label={new Date(r.day).toLocaleDateString('sl-SI',{day:'numeric',month:'numeric'})}
+              label={new Date(r.day + 'T12:00:00').toLocaleDateString('sl-SI',{day:'numeric',month:'numeric'})}
               color='var(--accent-green)'/>
           ))}
       </div>

@@ -285,7 +285,7 @@ function getMessageStats() {
     GROUP BY hour ORDER BY hour ASC
   `).all();
   const daily = d.prepare(`
-    SELECT date(timestamp) as day, COUNT(*) as n
+    SELECT date(timestamp, 'localtime') as day, COUNT(*) as n
     FROM messages WHERE timestamp >= datetime('now', '-30 days')
     GROUP BY day ORDER BY day ASC
   `).all();
@@ -500,7 +500,7 @@ function getStats() {
   const d = getDb();
   return {
     total:    d.prepare('SELECT COUNT(*) as n FROM messages').get().n,
-    today:    d.prepare("SELECT COUNT(*) as n FROM messages WHERE date(timestamp)=date('now')").get().n,
+    today:    d.prepare("SELECT COUNT(*) as n FROM messages WHERE date(timestamp,'localtime')=date('now','localtime')").get().n,
     lastHour: d.prepare("SELECT COUNT(*) as n FROM messages WHERE timestamp >= strftime('%Y-%m-%dT%H:%M:%SZ', datetime('now','-1 hour'))").get().n,
   };
 }

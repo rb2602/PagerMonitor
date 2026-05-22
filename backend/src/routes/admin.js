@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const os      = require('os');
 const { execSync } = require('child_process');
+const { version } = require('../../package.json');
 
 const { requireAdmin, requireEditor } = require('../services/auth');
 const { startSdrPipeline, stopSdrPipeline, restartSdrPipeline, getStatus, getLogs } = require('../services/sdr');
@@ -71,7 +72,7 @@ router.get('/system', adminOnly, (_req, res) => {
     platform: os.platform(), arch: os.arch(), cpus: os.cpus().length,
     hostname: os.hostname(), nodeVer: process.version,
     wsClients: getClientCount(), stats: getStats(),
-    mode: process.env.MODE || 'single', version: '2.0.0',
+    mode: process.env.MODE || 'single', version,
     disk,
   });
 });
@@ -146,7 +147,7 @@ router.get('/db/stats', adminOnly, (_req, res) => {
   try {
     const db = getDb();
     const total    = db.prepare('SELECT COUNT(*) as n FROM messages').get();
-    const today    = db.prepare("SELECT COUNT(*) as n FROM messages WHERE date(timestamp)=date('now')").get();
+    const today    = db.prepare("SELECT COUNT(*) as n FROM messages WHERE date(timestamp,'localtime')=date('now','localtime')").get();
     const lastHour = db.prepare("SELECT COUNT(*) as n FROM messages WHERE timestamp >= strftime('%Y-%m-%dT%H:%M:%SZ', datetime('now','-1 hour'))").get();
     const protocols = db.prepare('SELECT protocol, COUNT(*) as n FROM messages GROUP BY protocol ORDER BY n DESC').all();
     const topCodes  = db.prepare('SELECT capcode, COUNT(*) as n FROM messages GROUP BY capcode ORDER BY n DESC LIMIT 10').all();

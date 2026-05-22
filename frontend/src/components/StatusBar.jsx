@@ -1,4 +1,4 @@
-import { useRef, useLayoutEffect } from 'react';
+import { useRef, useLayoutEffect, useState, useEffect } from 'react';
 import { Activity, Wifi, WifiOff, Clock, HardDrive, RefreshCw } from 'lucide-react';
 
 function fmt24(ts) {
@@ -177,6 +177,22 @@ function MobileTicker({ sdrStatus, serverStatus, wsStatus, messageCount }) {
   );
 }
 
+function LiveClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem', marginLeft:'auto', color:'var(--text-2)', flexShrink:0 }}>
+      <Clock size={10} />
+      {now.toLocaleDateString('sl-SI', { day:'numeric', month:'numeric', year:'numeric' })}
+      {' '}
+      {now.toLocaleTimeString('sl-SI', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false })}
+    </span>
+  );
+}
+
 export default function StatusBar({ sdrStatus, serverStatus, wsStatus, messageCount }) {
   return (
     <>
@@ -189,6 +205,7 @@ export default function StatusBar({ sdrStatus, serverStatus, wsStatus, messageCo
       }}>
         <StatusItems sdrStatus={sdrStatus} serverStatus={serverStatus}
           wsStatus={wsStatus} messageCount={messageCount} />
+        <LiveClock />
       </div>
 
       {/* Mobile — scrolling ticker (hidden on desktop via CSS) */}
