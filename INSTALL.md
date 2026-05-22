@@ -191,11 +191,10 @@ Or configure per-dongle in **Admin → SDR Control → Multiple SDR dongles**.
 | | Dedup | Deduplicate identical messages within a time window |
 | | Highlights | Regex/text rules to colour-highlight messages in feed |
 | | Keyword Alerts | Flash/notify on messages matching keywords or patterns |
-| **Notifications** | Services | Discord, Telegram, Gotify, Pushover, MQTT — test each |
-| | Filter | Send to all messages or only selected capcodes/groups |
+| **Notifications** | Services | Discord, Telegram, Gotify, Pushover, MQTT — test each; global filter below controls which messages are sent |
 | | Webhooks | HTTP POST webhooks with HMAC-SHA256 signing |
 | | Email (SMTP) | Send email notifications via any SMTP provider |
-| | User preferences | Per-user notification filters (by group, alias, keyword) |
+| | User preferences | Per-user email and push filters (by group, alias, capcode, or keyword) |
 | **Aliases & Groups** | Groups | Organise aliases into groups/subgroups with colour coding |
 | | Aliases | Friendly names for capcodes, CSV import/export |
 | **System** | System | RAM, CPU, disk, uptime, connected clients |
@@ -239,9 +238,10 @@ Or configure per-dongle in **Admin → SDR Control → Multiple SDR dongles**.
 - Email — HTML formatted with Google Maps button
 - Webhooks — HTTP POST to any endpoint with HMAC-SHA256
 
-**Per-user email notifications**
-- Each user sets their own filter: all / by group / by alias / by capcode / by keyword
+**Per-user notifications (email + push)**
+- Each user sets independent filters for email and push: all / by group / by alias / by capcode / by keyword
 - Users manage their own preferences from the profile panel (username button in header)
+- Global filter (Admin → Notifications → Services) applies only to Discord, Telegram, Gotify, Pushover, and MQTT
 
 **Password reset**
 - "Forgot password" on login page → email with reset link (1 hour expiry)
@@ -429,7 +429,7 @@ pagermonitor/
 │   │   ├── database.js            SQLite + FTS5 + migrations
 │   │   ├── websocket.js           WebSocket server + broadcast
 │   │   ├── sdr.js                 rtl_fm + multimon-ng (single + multi-dongle)
-│   │   ├── notifications.js       Discord, Telegram, Gotify, Pushover, browser push
+│   │   ├── notifications.js       Discord, Telegram, Gotify, Pushover, MQTT (global filter)
 │   │   ├── webpush.js             VAPID key management + Web Push API
 │   │   ├── emailNotifier.js       Per-user email notifications
 │   │   ├── email.js               SMTP + password reset tokens

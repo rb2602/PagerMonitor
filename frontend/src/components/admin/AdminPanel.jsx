@@ -215,7 +215,18 @@ export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onG
                 display:'grid', gridTemplateColumns:'1fr 1fr',
                 gap:'0.2rem', padding:'0.5rem',
               }}>
-                {actualTabs.map(t => (
+                {visibleTabs.map((t, i) => t.group ? (
+                  <div key={`g-${i}`} style={{
+                    gridColumn:'1 / -1',
+                    padding:'0.4rem 0.55rem 0.1rem',
+                    fontSize:'0.58rem', fontWeight:700,
+                    textTransform:'uppercase', letterSpacing:'0.1em',
+                    color:'var(--text-3)',
+                    marginTop: i === 0 ? 0 : '0.25rem',
+                  }}>
+                    {t.group}
+                  </div>
+                ) : (
                   <button key={t.id} onClick={() => handleSetTab(t.id)} style={{
                     display:'flex', alignItems:'center', gap:'0.5rem',
                     padding:'0.55rem 0.75rem', borderRadius:'0.4rem',

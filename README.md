@@ -70,7 +70,7 @@ RTL-SDR dongle → rtl_fm → multimon-ng → Node.js → Browser (WebSocket)
 | **Email (SMTP)** | HTML formatted, Maps button, any SMTP provider |
 | **Webhooks** | HTTP POST to any endpoint, HMAC-SHA256 signed |
 
-**Per-user notification filters** — each user independently filters by group, alias, capcode, or keyword. Set your own preferences from the profile panel.
+**Per-user notification filters** — email and push each have independent filters per user (by group, alias, capcode, or keyword). The global filter on the Services page applies only to Discord, Telegram, Gotify, Pushover, and MQTT. Set preferences from the profile panel.
 
 ### 📲 PWA — installable app
 Install PagerMonitor directly to your home screen on Android, iOS, or desktop. No app store needed.
