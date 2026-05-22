@@ -271,10 +271,15 @@ function createPipeline(baseCfg, index) {
   }
 
   function applyRemoteConfig(remote) {
-    const changed = Object.keys(remote).some(k => cfg[k] !== remote[k]);
+    // Rebuild from baseCfg so cleared remote fields revert to .env defaults
+    const newCfg = { ...baseCfg };
+    for (const [k, v] of Object.entries(remote)) {
+      if (v !== '' && v != null) newCfg[k] = v;
+    }
+    const changed = Object.keys(newCfg).some(k => newCfg[k] !== cfg[k]);
     if (!changed) return;
     log('info', `${label} Applying remote config — restarting`);
-    Object.assign(cfg, remote);
+    Object.assign(cfg, newCfg);
     clearTimeout(restartTimer);
     restartTimer = null;
     start();

@@ -160,7 +160,11 @@ function getAllClientConfigs() {
 function saveClientConfig(clientId, config) {
   try {
     ensureTables();
-    const json    = JSON.stringify(config);
+    // Strip empty/null values — empty means "use Pi's .env default"
+    const filtered = Object.fromEntries(
+      Object.entries(config).filter(([, v]) => v !== '' && v != null)
+    );
+    const json    = JSON.stringify(filtered);
     const version = crypto.createHash('sha256').update(json).digest('hex').slice(0, 8);
     getDb().prepare(`
       INSERT INTO client_configs (client_id, config_json, version, updated_at)
