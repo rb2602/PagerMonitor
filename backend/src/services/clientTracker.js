@@ -100,7 +100,9 @@ function getClients() {
     const rows = getDb().prepare('SELECT * FROM sdr_clients ORDER BY last_seen DESC').all();
     const now  = Date.now();
     return rows.map(r => {
-      const lastMs = new Date(r.last_seen).getTime();
+      // SQLite datetime('now') is UTC without 'Z' — append Z so JS parses as UTC
+      const tsStr  = r.last_seen?.includes('T') ? r.last_seen : (r.last_seen || '').replace(' ', 'T') + 'Z';
+      const lastMs = new Date(tsStr).getTime();
       return {
         id:             r.id,
         firstSeen:      r.first_seen,
@@ -119,6 +121,16 @@ function getClients() {
   } catch (e) {
     logger.warn(`clientTracker.getClients: ${e.message}`);
     return [];
+  }
+}
+
+function recordClientOffline(clientId) {
+  if (!clientId) return;
+  try {
+    ensureTables();
+    getDb().prepare(`UPDATE sdr_clients SET last_seen = '1970-01-01 00:00:00' WHERE id = ?`).run(clientId);
+  } catch (e) {
+    logger.warn(`clientTracker.recordClientOffline: ${e.message}`);
   }
 }
 
@@ -182,7 +194,7 @@ function saveClientConfig(clientId, config) {
 }
 
 module.exports = {
-  recordClientMessage, recordClientPing,
+  recordClientMessage, recordClientPing, recordClientOffline,
   getClients, resetClient,
   getClientConfig, getAllClientConfigs, saveClientConfig,
 };

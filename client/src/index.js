@@ -335,7 +335,11 @@ const shutdown = () => {
   log('info', 'Shutting down...');
   clearInterval(configTimer);
   pipelines.forEach(p => p.stop());
-  process.exit(0);
+  // Notify server we're offline so it doesn't wait for the threshold to expire
+  httpRequest('POST', '/client/offline', {})
+    .catch(() => {})
+    .finally(() => process.exit(0));
+  setTimeout(() => process.exit(0), 3000); // safety exit if request hangs
 };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT',  shutdown);

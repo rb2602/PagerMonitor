@@ -19,7 +19,7 @@ const { sendWebhooks }          = require('../services/webhooks');
 const { sendUserEmailNotifications } = require('../services/emailNotifier');
 const { sendPushPerUser }       = require('../services/webpush');
 const { recordMessage }         = require('../services/deadair');
-const { recordClientMessage, recordClientPing, getClientConfig } = require('../services/clientTracker');
+const { recordClientMessage, recordClientPing, recordClientOffline, getClientConfig } = require('../services/clientTracker');
 const { getDedupConfig }        = require('../services/config');
 const logger                    = require('../utils/logger');
 
@@ -159,6 +159,13 @@ router.get('/status', requireClientKey, (req, res) => {
   const clientId = req.headers['x-client-id'] || 'unknown';
   recordClientPing(clientId, req.ip);
   res.json({ ok: true, server: 'PagerMonitor', version });
+});
+
+// POST /client/offline — client notifies server it is shutting down gracefully
+router.post('/offline', requireClientKey, (req, res) => {
+  const clientId = req.headers['x-client-id'] || '';
+  if (clientId) recordClientOffline(clientId);
+  res.json({ ok: true });
 });
 
 // GET /client/config — client polls for remote config changes
