@@ -209,7 +209,7 @@ export default function SdrClients() {
         <button className="pm-btn" onClick={load}><RefreshCw size={12}/> Refresh</button>
       </h2>
       <p style={{ fontSize:'0.82rem', color:'var(--text-3)', marginBottom:'1rem', lineHeight:1.6 }}>
-        Remote Raspberry Pi clients. Online = seen within 5 minutes. Use <strong>Config</strong> to push SDR settings remotely without SSH.
+        Remote Raspberry Pi clients. Online = seen within 90 seconds. Use <strong>Config</strong> to push SDR settings remotely without SSH.
       </p>
 
       <Flash msg={msg}/>
@@ -228,7 +228,7 @@ export default function SdrClients() {
       ))}
 
       <div style={{ fontSize:'0.72rem', color:'var(--text-3)', fontFamily:'monospace', marginTop:'0.75rem' }}>
-        Auto-refreshes every 15 seconds · Online = seen within 5 minutes
+        Auto-refreshes every 15 seconds · Online = seen within 90 seconds
       </div>
     </div>
   );

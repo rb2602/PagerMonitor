@@ -112,7 +112,7 @@ function getClients() {
         protocols:      r.protocols || null,
         lastMessage:    r.last_message || null,
         lastMessageTs:  r.last_message_ts || null,
-        online:         (now - lastMs) < 5 * 60 * 1000,
+        online:         (now - lastMs) < 90 * 1000,
         silentSec:      Math.round((now - lastMs) / 1000),
       };
     });

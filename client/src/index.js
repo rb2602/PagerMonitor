@@ -1,7 +1,8 @@
 'use strict';
 
-const { spawn } = require('child_process');
-const iconv     = require('iconv-lite');
+const { spawn }       = require('child_process');
+const { PassThrough } = require('stream');
+const iconv           = require('iconv-lite');
 const http      = require('http');
 const https     = require('https');
 
@@ -187,12 +188,14 @@ function createPipeline(baseCfg, index) {
   let restartTimer    = null;
   let consecutiveFails = 0;
   let generation = 0;
+  let watchdogTimer = null;
   const label = `[dongle-${cfg.device}]`;
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   function kill() {
-    try { if (rtlProc && mmonProc) rtlProc.stdout?.unpipe(mmonProc.stdin); } catch (_) {}
+    clearInterval(watchdogTimer); watchdogTimer = null;
+    try { if (rtlProc) rtlProc.stdout?.unpipe(); } catch (_) {}
     try { if (mmonProc) mmonProc.kill('SIGTERM'); } catch (_) {}
     try { if (rtlProc)  rtlProc.kill('SIGTERM'); } catch (_) {}
     rtlProc = null; mmonProc = null;
@@ -215,9 +218,22 @@ function createPipeline(baseCfg, index) {
       rtlProc  = spawn('rtl_fm',      rtlArgs,  { stdio: ['ignore', 'pipe', 'pipe'] });
       mmonProc = spawn('multimon-ng', mmonArgs, { stdio: ['pipe',   'pipe', 'pipe'] });
 
-      rtlProc.stdout.pipe(mmonProc.stdin);
+      const tap = new PassThrough();
+      let lastRtlMs = Date.now();
+      tap.on('data', () => { lastRtlMs = Date.now(); });
+      tap.on('error', () => {});
+      rtlProc.stdout.pipe(tap);
+      tap.pipe(mmonProc.stdin);
       rtlProc.stdout.on('error', () => {});
       mmonProc.stdin.on('error',  () => {});
+      watchdogTimer = setInterval(() => {
+        if (stopping || myGen !== generation) { clearInterval(watchdogTimer); watchdogTimer = null; return; }
+        if (Date.now() - lastRtlMs > 20000) {
+          clearInterval(watchdogTimer); watchdogTimer = null;
+          log('warn', `${label} rtl_fm watchdog: no audio data for 20s — restarting`);
+          if (!stopping) scheduleRestart();
+        }
+      }, 10000);
 
       rtlProc.stderr.on('data', d =>
         d.toString().split('\n').forEach(l => { if (l.trim()) log('debug', `${label} rtl_fm: ${l.trim()}`); })
