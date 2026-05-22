@@ -61,6 +61,8 @@ Multiple RPi clients can forward to the same server — useful for monitoring mu
 
 ### Native install (systemd)
 
+#### Option A — Single device
+
 ```bash
 # 1. Install dependencies
 sudo apt update && sudo apt install -y rtl-sdr multimon-ng nodejs npm
@@ -80,6 +82,66 @@ sudo systemctl start pagermonitor
 # 5. Open browser
 # http://<pi-ip>:3000
 # Login: admin / <see "First login" section below for the password>
+```
+
+#### Option B — Server (no SDR dongle)
+
+Run this on the machine that will host the web UI and database (Proxmox VM, NAS, PC).
+No RTL-SDR hardware required — the RPi client (next section) forwards decoded messages here.
+
+```bash
+# 1. Install Node.js only (no SDR tools needed)
+sudo apt update && sudo apt install -y nodejs npm
+
+# 2. Clone and install
+git clone https://github.com/dj3ky/pagermonitor.git ~/pagermonitor
+cd ~/pagermonitor
+bash install.sh --server
+
+# 3. Configure
+nano ~/pagermonitor/backend/.env
+# Set DISABLE_SDR=true
+
+# 4. Start
+sudo systemctl start pagermonitor
+
+# 5. Open browser and generate a client key for the RPi
+# http://<server-ip>:3000
+# Login: admin / <see "First login" section below for the password>
+# Then: Admin → Client Key → Generate → copy the key
+```
+
+#### Option B — RPi client
+
+Run this on the Raspberry Pi with the RTL-SDR dongle. It decodes pager traffic and
+forwards it to the server set up above. No web UI runs on the Pi itself.
+
+```bash
+# 1. Install dependencies
+sudo apt update && sudo apt install -y rtl-sdr multimon-ng nodejs npm
+
+# 2. Clone repo
+git clone https://github.com/dj3ky/pagermonitor.git ~/pagermonitor
+
+# 3. Run client installer (sets up systemd service pagermonitor-client)
+cd ~/pagermonitor/client
+bash install.sh
+
+# 4. Configure
+nano ~/pagermonitor/client/.env
+# Required:
+#   SERVER_URL=http://<server-ip>:3000
+#   CLIENT_KEY=<key copied from Admin → Client Key on the server>
+#   RTL_FM_FREQ=173.250M   (your local pager frequency)
+
+# 5. Start
+sudo systemctl start pagermonitor-client
+
+# 6. Watch logs
+sudo journalctl -u pagermonitor-client -f
+
+# 7. Verify connection
+# Server browser: Admin → SDR Clients — this Pi should appear as connected
 ```
 
 ### First login — finding your admin password
