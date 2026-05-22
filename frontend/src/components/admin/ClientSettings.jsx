@@ -111,7 +111,7 @@ export default function ClientSettings() {
       <div className="pm-card" style={{ marginBottom:'1rem' }}>
         <div className="pm-section-title">RPi client configuration</div>
         <p style={{ fontSize:'0.78rem', color:'var(--text-3)', marginBottom:'0.75rem' }}>
-          Put this in <code>~/pagermonitor-client/.env</code> on the Raspberry Pi:
+          Put this in <code>~/pagermonitor/client/.env</code> on the Raspberry Pi:
         </p>
         <pre style={{ background:'var(--bg-0)', border:'1px solid var(--border)', borderRadius:'0.4rem',
           padding:'0.75rem 1rem', fontSize:'0.75rem', fontFamily:'monospace', overflowX:'auto',
@@ -134,18 +134,16 @@ MULTIMON_QUIET=1`}
         <div style={{ fontSize:'0.8rem', color:'var(--text-2)', lineHeight:2, fontFamily:'monospace' }}>
           {[
             '# On the Raspberry Pi:',
-            'mkdir ~/pagermonitor-client && cd ~/pagermonitor-client',
-            '# Copy client/ folder from the PagerMonitor archive',
-            'npm install',
-            'cp .env.example .env && nano .env',
-            '',
-            '# Install as a systemd service:',
+            'sudo apt update && sudo apt install -y rtl-sdr multimon-ng nodejs npm',
+            'git clone https://github.com/dj3ky/pagermonitor.git ~/pagermonitor',
+            'cd ~/pagermonitor/client',
             'bash install.sh',
             '',
-            '# Or manually:',
-            'sudo cp systemd/pagermonitor-client.service /etc/systemd/system/',
-            'sudo systemctl daemon-reload',
-            'sudo systemctl enable --now pagermonitor-client',
+            '# Edit config (SERVER_URL, CLIENT_KEY, RTL_FM_FREQ):',
+            'nano ~/pagermonitor/client/.env',
+            '',
+            '# Start:',
+            'sudo systemctl start pagermonitor-client',
             'sudo journalctl -u pagermonitor-client -f',
           ].map((line, i) => (
             <div key={i} style={{ color: line.startsWith('#') ? 'var(--text-3)' : 'var(--accent-green)' }}>
