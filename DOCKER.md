@@ -25,8 +25,34 @@ make start
 
 # 4. Open browser
 # http://localhost:3000
-# Login: admin / admin123 (change immediately in Admin → Users!)
+# Login: admin / <see "First login" section below for the password>
 ```
+
+### First login — finding your admin password
+
+On first boot (empty database), PagerMonitor generates a random admin password and prints it once to the container log:
+
+```bash
+docker compose logs pagermonitor | grep "Default admin"
+# ⚠  Default admin created  username=admin  password=3f9a1c...
+```
+
+**If you missed it**, set `DEFAULT_ADMIN_PASS` in `.env` and recreate the container with a fresh volume:
+
+```bash
+make stop
+
+# Add a known password to .env
+echo "DEFAULT_ADMIN_PASS=changeme123" >> .env
+
+# Remove the data volume (all messages will be lost — back up first if needed)
+docker volume rm pagermonitor-data
+
+# Start again — the password will now be "changeme123"
+make start
+```
+
+Change the password immediately after login: **Admin → Users → admin → Change password**.
 
 ### Option B — Distributed (server + remote RPi clients)
 
@@ -89,7 +115,7 @@ All settings are in `.env`. Key variables:
 | `RTL_FM_PPM` | `0` | Frequency correction |
 | `MULTIMON_PROTOCOLS` | `POCSAG1200` | Protocols to decode |
 | `LOG_LEVEL` | `info` | `error`/`warn`/`info`/`debug` |
-| `DEFAULT_ADMIN_PASS` | `admin123` | First-run admin password |
+| `DEFAULT_ADMIN_PASS` | _(random)_ | First-run admin password. If unset, a random password is generated and printed to the log. |
 
 See `.env.example` for all options with descriptions.
 

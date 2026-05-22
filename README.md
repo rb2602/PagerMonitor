@@ -122,7 +122,7 @@ nano ~/pagermonitor/backend/.env
 sudo systemctl start pagermonitor
 ```
 
-Open `http://<pi-ip>:3000` · Login: **admin** / **admin123** · Change password immediately.
+Open `http://<pi-ip>:3000` · Login: **admin** / *see startup log for generated password* · Change password immediately.
 
 ### Docker (any machine)
 

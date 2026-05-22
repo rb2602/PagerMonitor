@@ -6,10 +6,10 @@ const { getDb, getHistory, searchMessages, getStats, getAliases, upsertAlias, de
         getGroups, getHighlightRules, getLastSeenId, setLastSeenId } = require('../services/database');
 const { getStatus }      = require('../services/sdr');
 const { getClientCount } = require('../services/websocket');
-const { requireAuth }    = require('../services/auth');
+const { requireAuth, requireEditor } = require('../services/auth');
 const { getPublicKey, saveSubscription, removeSubscription } = require('../services/webpush');
 
-router.get('/history', (req, res) => {
+router.get('/history', requireAuth, (req, res) => {
   const limit  = Math.min(parseInt(req.query.limit || '200', 10), 1000);
   const before = parseInt(req.query.before || '0', 10); // load messages older than this id
   try {
@@ -32,14 +32,14 @@ router.get('/history', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.get('/search', (req, res) => {
+router.get('/search', requireAuth, (req, res) => {
   const q = (req.query.q||'').trim();
   if (!q) return res.status(400).json({ error: 'q required' });
   try { res.json(searchMessages(q, Math.min(parseInt(req.query.limit||'100',10), 500))); }
   catch (e) { res.status(500).json({ error: 'Search failed' }); }
 });
 
-router.get('/status', (_req, res) => {
+router.get('/status', requireAuth, (_req, res) => {
   res.json({ ok: true, version: require('../../package.json').version, mode: process.env.MODE||'single',
     sdrDisabled: process.env.DISABLE_SDR === 'true',
     uptime: process.uptime(), wsClients: getClientCount(),
@@ -47,20 +47,20 @@ router.get('/status', (_req, res) => {
     freeMem: os.freemem(), totalMem: os.totalmem(), sdr: getStatus(), stats: getStats() });
 });
 
-router.get('/aliases', (_req, res) => res.json(getAliases()));
-router.put('/aliases/:capcode', (req, res) => {
+router.get('/aliases', requireAuth, (_req, res) => res.json(getAliases()));
+router.put('/aliases/:capcode', requireEditor, (req, res) => {
   const { name, color, notes, group_id } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   upsertAlias(req.params.capcode, name, color, notes, group_id);
   res.json({ ok: true });
 });
-router.delete('/aliases/:capcode', (req, res) => { deleteAlias(req.params.capcode); res.json({ ok: true }); });
+router.delete('/aliases/:capcode', requireEditor, (req, res) => { deleteAlias(req.params.capcode); res.json({ ok: true }); });
 
-router.get('/groups', (_req, res) => { try { res.json(getGroups()); } catch (e) { res.status(500).json({ error: e.message }); } });
-router.get('/rules',  (_req, res) => { try { res.json(getHighlightRules()); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.get('/groups', requireAuth, (_req, res) => { try { res.json(getGroups()); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.get('/rules',  requireAuth, (_req, res) => { try { res.json(getHighlightRules()); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 // Messages with coordinates for the map view
-router.get('/map', (req, res) => {
+router.get('/map', requireAuth, (req, res) => {
   try {
     const limit      = Math.min(parseInt(req.query.limit || '500', 10), 2000);
     const maxAgeDays = parseInt(req.query.maxAgeDays || '30', 10);
@@ -80,7 +80,7 @@ router.get('/map', (req, res) => {
 });
 
 // Save geocoded coordinates back to DB
-router.post('/messages/:id/location', (req, res) => {
+router.post('/messages/:id/location', requireAuth, (req, res) => {
   try {
     const id  = parseInt(req.params.id, 10);
     const lat = parseFloat(req.body.lat);
@@ -107,8 +107,8 @@ router.post('/last-seen', requireAuth, (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Archive (public read) ─────────────────────────────────────────────────────
-router.get('/archive', (req, res) => {
+// ── Archive ───────────────────────────────────────────────────────────────────
+router.get('/archive', requireAuth, (req, res) => {
   try {
     const { searchArchive, getArchiveHistory, getArchiveStats } = require('../services/archive');
     const q     = (req.query.q || '').trim();
@@ -121,7 +121,7 @@ router.get('/archive', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.get('/archive/stats', (_req, res) => {
+router.get('/archive/stats', requireAuth, (_req, res) => {
   try {
     const { getArchiveStats } = require('../services/archive');
     res.json(getArchiveStats());
@@ -161,7 +161,7 @@ router.delete('/notes/:id', requireAuth, (req, res) => {
 });
 
 // Archive CSV export
-router.get('/archive/export', (req, res) => {
+router.get('/archive/export', requireAuth, (req, res) => {
   try {
     const { getArchiveHistory, searchArchive } = require('../services/archive');
     const q    = (req.query.q || '').trim();

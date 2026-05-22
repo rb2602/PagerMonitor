@@ -120,7 +120,7 @@ function requireEditor(req, res, next) {
 // ── First-run: create default admin if no users exist ────────────────────────
 async function ensureDefaultAdmin() {
   if (db.countUsers() === 0) {
-    const pass = process.env.DEFAULT_ADMIN_PASS || 'admin123';
+    const pass = process.env.DEFAULT_ADMIN_PASS || crypto.randomBytes(12).toString('hex');
     await register('admin', pass, 'admin');
     logger.warn(`⚠  Default admin created  username=admin  password=${pass}`);
     logger.warn('   Change this password in Admin → Users immediately!');

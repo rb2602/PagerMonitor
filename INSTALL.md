@@ -79,8 +79,35 @@ sudo systemctl start pagermonitor
 
 # 5. Open browser
 # http://<pi-ip>:3000
-# Login: admin / admin123 (change immediately!)
+# Login: admin / <see "First login" section below for the password>
 ```
+
+### First login — finding your admin password
+
+On first boot (empty database), PagerMonitor generates a random admin password and prints it once to the log:
+
+```bash
+sudo journalctl -u pagermonitor -n 50 --no-pager | grep "Default admin"
+# ⚠  Default admin created  username=admin  password=3f9a1c...
+```
+
+**If you missed it**, set `DEFAULT_ADMIN_PASS` in `backend/.env` and wipe the user table so the first-run setup runs again:
+
+```bash
+# Stop the service
+sudo systemctl stop pagermonitor
+
+# Remove the database (all messages will be lost — back up first if needed)
+rm ~/pagermonitor/backend/data/pagermonitor.db
+
+# Set a known password for next start
+echo "DEFAULT_ADMIN_PASS=changeme123" >> ~/pagermonitor/backend/.env
+
+# Start again — the password will now be "changeme123"
+sudo systemctl start pagermonitor
+```
+
+Change the password immediately after login: **Admin → Users → admin → Change password**.
 
 ### Docker
 
@@ -122,7 +149,7 @@ Edit `backend/.env` (native) or `.env` (Docker):
 | `MULTIMON_PROTOCOLS` | `POCSAG1200` | Space-separated: `POCSAG512 POCSAG1200 FLEX` |
 | `MULTIMON_POCSAG_CHARSET` | _(empty)_ | e.g. `ISO-8859-2` for Slovenian Š Č Ž |
 | `LOG_LEVEL` | `info` | `error` / `warn` / `info` / `debug` |
-| `DEFAULT_ADMIN_PASS` | `admin123` | First-run admin password |
+| `DEFAULT_ADMIN_PASS` | _(random)_ | First-run admin password. If unset, a random password is generated and printed to the startup log. |
 
 All SDR settings can also be changed live in **Admin → SDR Control** without editing files.
 
@@ -307,15 +334,11 @@ Returns JSON — use with Uptime Kuma, Zabbix, etc.:
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Health check for monitoring |
-| `GET` | `/api/status` | Server + SDR status |
-| `GET` | `/api/history?limit=200&before=<id>` | Messages (paginated) |
-| `GET` | `/api/search?q=text` | Full-text search |
-| `GET` | `/api/aliases` | All aliases |
-| `GET` | `/api/groups` | All groups |
-| `GET` | `/api/archive?limit=50&q=text` | Archive search |
-| `GET` | `/api/archive/export?q=text` | Archive CSV download |
+| `GET` | `/api/site-settings` | Site name + public mode flag (shown on login page) |
 
 ### Auth required
+
+> When **Public Mode** is enabled in Admin → Site Settings, unauthenticated GET requests are also allowed to the feed endpoints below.
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -326,12 +349,26 @@ Returns JSON — use with Uptime Kuma, Zabbix, etc.:
 | `GET` | `/auth/me` | Current user info |
 | `PUT` | `/auth/me/email` | Update own email |
 | `GET/PUT` | `/auth/me/notif-prefs` | Own notification preferences |
+| `GET` | `/api/status` | Server + SDR status |
+| `GET` | `/api/history?limit=200&before=<id>` | Messages (paginated) |
+| `GET` | `/api/search?q=text` | Full-text search |
+| `GET` | `/api/aliases` | All aliases |
+| `GET` | `/api/groups` | All groups |
+| `GET` | `/api/archive?limit=50&q=text` | Archive search |
+| `GET` | `/api/archive/export?q=text` | Archive CSV download |
 | `GET` | `/api/messages/:id/notes` | Get notes for a message |
 | `POST` | `/api/messages/:id/notes` | Add note to a message |
 | `DELETE` | `/api/notes/:id` | Delete a note |
 | `GET` | `/api/push/vapid-public-key` | VAPID public key for push subscription |
 | `POST` | `/api/push/subscribe` | Subscribe device to background push notifications |
 | `DELETE` | `/api/push/subscribe` | Unsubscribe device from push notifications |
+
+### Editor required
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `PUT` | `/api/aliases/:capcode` | Create or update an alias |
+| `DELETE` | `/api/aliases/:capcode` | Delete an alias |
 
 ### Admin required
 

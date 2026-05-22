@@ -51,10 +51,7 @@ async function main() {
   // Auth routes (public — login, setup check)
   app.use('/auth', authRouter);
 
-  // REST API (public feed data)
-  app.use('/api', apiRouter);
-
-  // Public site settings (shown on login page + drives public mode)
+  // Public site settings (shown on login page + drives public mode, no auth required)
   app.get('/api/site-settings', (_req, res) => {
     const { getSetting } = require('./services/database');
     try {
@@ -63,20 +60,22 @@ async function main() {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // Public mode middleware — if publicMode is enabled in settings,
-  // allow unauthenticated GET requests to /api/* (read-only feed data)
+  // Public mode middleware — must run BEFORE apiRouter so req.publicAccess is set
+  // before requireAuth is evaluated inside route handlers
   app.use('/api', (req, res, next) => {
     if (req.method !== 'GET') return next(); // only GET is public
     const { getSetting } = require('./services/database');
     try {
       const s = getSetting('site_settings', { publicMode: false });
       if (s.publicMode) {
-        // Inject a synthetic anonymous session so requireAuth routes still work if called
         req.publicAccess = true;
       }
     } catch (_) {}
     next();
   });
+
+  // REST API
+  app.use('/api', apiRouter);
 
   // Client ingestion (remote RPi clients forwarding SDR data)
   const clientRouter = require('./routes/client');
