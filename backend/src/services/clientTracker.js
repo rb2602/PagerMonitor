@@ -38,6 +38,7 @@ function ensureTables() {
     ['protocols',       'TEXT'],
     ['last_message',    'TEXT'],
     ['last_message_ts', 'TEXT'],
+    ['sdr_running',     'INTEGER'],
   ]) {
     if (!cols.includes(col)) {
       db.exec(`ALTER TABLE sdr_clients ADD COLUMN ${col} ${def}`);
@@ -79,15 +80,17 @@ function recordClientPing(clientId, ip, extra = {}) {
   if (!clientId) return;
   try {
     ensureTables();
+    const sdrRunning = extra.sdrRunning != null ? (extra.sdrRunning ? 1 : 0) : null;
     getDb().prepare(`
-      INSERT INTO sdr_clients (id, last_seen, ip, freq, protocols)
-      VALUES (?, datetime('now'), ?, ?, ?)
+      INSERT INTO sdr_clients (id, last_seen, ip, freq, protocols, sdr_running)
+      VALUES (?, datetime('now'), ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
-        last_seen = datetime('now'),
-        ip        = COALESCE(excluded.ip, ip),
-        freq      = COALESCE(excluded.freq, freq),
-        protocols = COALESCE(excluded.protocols, protocols)
-    `).run(clientId, ip || null, extra.freq || null, extra.protocols || null);
+        last_seen   = datetime('now'),
+        ip          = COALESCE(excluded.ip, ip),
+        freq        = COALESCE(excluded.freq, freq),
+        protocols   = COALESCE(excluded.protocols, protocols),
+        sdr_running = COALESCE(excluded.sdr_running, sdr_running)
+    `).run(clientId, ip || null, extra.freq || null, extra.protocols || null, sdrRunning);
   } catch (e) {
     logger.warn(`clientTracker.recordClientPing: ${e.message}`);
   }
@@ -116,6 +119,7 @@ function getClients() {
         lastMessageTs:  r.last_message_ts || null,
         online:         (now - lastMs) < 90 * 1000,
         silentSec:      Math.round((now - lastMs) / 1000),
+        sdrRunning:     r.sdr_running == null ? null : r.sdr_running === 1,
       };
     });
   } catch (e) {

@@ -42,27 +42,34 @@ function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount }) {
           if (clients.length === 0) return (
             <span style={{ fontWeight:700, color:'var(--text-3)' }}>SDR: REMOTE</span>
           );
-          const allOn  = clients.every(c => c.online);
-          const someOn = clients.some(c => c.online);
+          const allActive  = clients.every(c => c.online && c.sdrRunning !== false);
+          const someActive = clients.some(c => c.online && c.sdrRunning !== false);
+          const anyOnline  = clients.some(c => c.online);
           return (<>
             {clients.map((c, i) => {
-              const tip = c.online
-                ? `${c.id}${c.freq ? ` · ${c.freq}` : ''}${c.protocols ? ` · ${c.protocols}` : ''} · ONLINE`
-                : `${c.id}${c.freq ? ` · ${c.freq}` : ''} · OFFLINE · ${fmtSilent(c.silentSec)}`;
+              const sdrOk = c.online && c.sdrRunning !== false;
+              const dotBg   = sdrOk ? 'var(--accent-green)' : c.online ? 'var(--accent-amber)' : 'var(--accent-red)';
+              const dotGlow = sdrOk ? 'var(--glow-green)'   : c.online ? 'var(--glow-amber)'   : 'var(--glow-red)';
+              const tip = !c.online
+                ? `${c.id}${c.freq ? ` · ${c.freq}` : ''} · OFFLINE · ${fmtSilent(c.silentSec)}`
+                : sdrOk
+                ? `${c.id}${c.freq ? ` · ${c.freq}` : ''}${c.protocols ? ` · ${c.protocols}` : ''} · SDR ACTIVE`
+                : `${c.id} · ONLINE · SDR not running`;
               return (
                 <span key={i} title={tip} style={{ display:'inline-flex', alignItems:'center' }}>
                   <span style={{
                     width:'7px', height:'7px', borderRadius:'50%',
-                    background: c.online ? 'var(--accent-green)' : 'var(--accent-red)',
-                    boxShadow:  c.online ? 'var(--glow-green)'  : 'var(--glow-red)',
+                    background: dotBg,
+                    boxShadow:  dotGlow,
                     animation:  c.online ? 'blink 2s ease-in-out infinite' : 'none',
                     flexShrink: 0,
                   }}/>
                 </span>
               );
             })}
-            <span style={{ fontWeight:700, color: allOn ? 'var(--accent-green)' : someOn ? 'var(--accent-amber)' : 'var(--accent-red)' }}>
-              SDR {allOn ? 'ACTIVE' : someOn ? 'PARTIAL' : 'OFFLINE'}
+            <span style={{ fontWeight:700,
+              color: allActive ? 'var(--accent-green)' : someActive || anyOnline ? 'var(--accent-amber)' : 'var(--accent-red)' }}>
+              SDR {allActive ? 'ACTIVE' : someActive ? 'PARTIAL' : 'OFFLINE'}
             </span>
           </>);
         })() : sdrStatus?.dongleStatuses?.length > 1 ? (

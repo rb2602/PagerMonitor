@@ -161,9 +161,10 @@ let globalOverrideCfg   = null; // remote config overlay (applies to all dongles
 
 async function pollConfig(pipelines) {
   try {
-    const freqs     = pipelines.map(p => p.getCfg().freq).join(':');
-    const protocols = [...new Set(pipelines.map(p => p.getCfg().protocols))].join(' ');
-    const r = await httpRequest('GET', `/client/config?freq=${encodeURIComponent(freqs)}&protocols=${encodeURIComponent(protocols)}`);
+    const freqs      = pipelines.map(p => p.getCfg().freq).join(':');
+    const protocols  = [...new Set(pipelines.map(p => p.getCfg().protocols))].join(' ');
+    const sdrRunning = pipelines.every(p => p.isRunning());
+    const r = await httpRequest('GET', `/client/config?freq=${encodeURIComponent(freqs)}&protocols=${encodeURIComponent(protocols)}&sdrRunning=${sdrRunning}`);
     if (r.status !== 200 || !r.body?.config) return;
     const { config, version } = r.body;
     if (!config || version === globalConfigVersion) return;
@@ -188,12 +189,14 @@ function createPipeline(baseCfg, index) {
   let restartTimer    = null;
   let consecutiveFails = 0;
   let generation = 0;
-  let watchdogTimer = null;
+  let watchdogTimer   = null;
+  let pipelineRunning = false;
   const label = `[dongle-${cfg.device}]`;
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   function kill() {
+    pipelineRunning = false;
     clearInterval(watchdogTimer); watchdogTimer = null;
     try { if (rtlProc) rtlProc.stdout?.unpipe(); } catch (_) {}
     try { if (mmonProc) mmonProc.kill('SIGTERM'); } catch (_) {}
@@ -263,14 +266,16 @@ function createPipeline(baseCfg, index) {
       const onExit = (src) => (code, sig) => {
         if (myGen !== generation) return;
         log('info', `${label} ${src} exited (${code}/${sig})`);
+        pipelineRunning = false;
         if (!stopping) scheduleRestart();
       };
       rtlProc.on('exit',  onExit('rtl_fm'));
       mmonProc.on('exit', onExit('multimon-ng'));
-      rtlProc.on('error',  e => { if (myGen !== generation) return; log('error', `${label} rtl_fm error: ${e.message}`);  if (!stopping) scheduleRestart(); });
-      mmonProc.on('error', e => { if (myGen !== generation) return; log('error', `${label} mmon error: ${e.message}`);     if (!stopping) scheduleRestart(); });
+      rtlProc.on('error',  e => { if (myGen !== generation) return; log('error', `${label} rtl_fm error: ${e.message}`);  pipelineRunning = false; if (!stopping) scheduleRestart(); });
+      mmonProc.on('error', e => { if (myGen !== generation) return; log('error', `${label} mmon error: ${e.message}`);     pipelineRunning = false; if (!stopping) scheduleRestart(); });
 
       consecutiveFails = 0;
+      pipelineRunning = true;
       log('info', `${label} Pipeline running — freq=${cfg.freq} protocols=${cfg.protocols}`);
     } catch (e) {
       log('error', `${label} Spawn failed: ${e.message}`);
@@ -307,7 +312,7 @@ function createPipeline(baseCfg, index) {
     kill();
   }
 
-  return { start, stop, applyRemoteConfig, getCfg: () => ({ ...cfg }), label };
+  return { start, stop, applyRemoteConfig, getCfg: () => ({ ...cfg }), isRunning: () => pipelineRunning, label };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
