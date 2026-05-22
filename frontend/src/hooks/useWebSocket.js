@@ -44,7 +44,10 @@ export function useWebSocket(backendUrl) {
       shuttingDownRef.current = false;
       // On reconnect (not first connect) fetch history to catch missed messages
       if (attemptsRef.current > 0) {
-        fetch((backendUrl || '') + '/api/history?limit=50')
+        const tok = localStorage.getItem('pm_token') || '';
+        fetch((backendUrl || '') + '/api/history?limit=50', {
+          headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+        })
           .then(r => r.json())
           .then(rows => {
             if (Array.isArray(rows)) {
