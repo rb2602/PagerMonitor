@@ -131,7 +131,7 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
             {msg.capcode}
           </span>
           {/* Badge column — fixed width keeps message aligned; wrap so both badges are always visible */}
-          <div style={{ flexShrink:0, width:BADGE_COL_W, display:'flex', alignItems:'flex-start', gap:'0.3rem', flexWrap:'wrap' }}>
+          <div style={{ flexShrink:0, width:BADGE_COL_W, display:'flex', alignItems:'flex-start', justifyContent:'center', gap:'0.3rem', flexWrap:'wrap' }}>
             {alias     && <Badge label={alias}     color={aliasColor} title="Filter by alias"  onClick={() => onFilter?.('alias',alias)} />}
             {groupName && <Badge label={groupName} color={groupColor} title="Filter by group"  onClick={() => onFilter?.('group',groupName)} />}
           </div>

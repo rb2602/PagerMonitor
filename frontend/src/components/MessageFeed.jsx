@@ -22,7 +22,7 @@ function FeedHeader() {
       <span style={{ width:'12px', flexShrink:0 }} />
       {cell('Date / Time',   { flexShrink:0, minWidth:'62px', textAlign:'right' })}
       {cell('Capcode',       { flexShrink:0, minWidth:'70px', textAlign:'center' })}
-      {cell('Alias / Group', { flexShrink:0, width: BADGE_COL_WIDTH })}
+      {cell('Alias / Group', { flexShrink:0, width: BADGE_COL_WIDTH, textAlign:'center' })}
       {cell('Message',       { flex:1 })}
     </div>
   );
