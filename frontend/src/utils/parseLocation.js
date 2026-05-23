@@ -62,10 +62,14 @@ function feScore({ hasKeyword, hasCityHint, hasHouseNum, hasHint, hasMultipleHin
 // Words that appear in Slovenian emergency messages but are not part of addresses
 const SI_STOPWORDS_FE = new Set([
   'v', 'na', 'pri', 'ob', 'za', 'do', 'od', 'k', 'iz', 'po', 's', 'z',
-  'je', 'so', 'in', 'ali', 'ter', 'da', 'ne', 'se', 'pa', 'ko',
+  'je', 'so', 'in', 'ali', 'ter', 'da', 'ne', 'se', 'pa', 'ko', 'ker',
   'požar', 'gorenje', 'nesreča', 'prometna', 'intervencija',
   'gasilci', 'reševalci', 'policija', 'nujno', 'pomoč', 'klic', 'alarm',
   'km', 'm', 'ha',
+  'oseba', 'osebe', 'oseb', 'osebno', 'vozilo', 'vozila', 'vozilu', 'vozilom',
+  'motorist', 'kolesar', 'pešec',
+  'padla', 'padel', 'gospa', 'gospod', 'odpiranje', 'vrat', 'steno',
+  'trčilo', 'stena', 'steni', 'stanovanju', 'stanovanjska',
 ]);
 
 // ── SI-specific candidate extraction (frontend, no prefix index) ──────────────

@@ -55,8 +55,9 @@ function Badge({ label, color, title, onClick }) {
   );
 }
 
-export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], onFilter, onMapClick, onDelete }) {
+export default function MessageRow({ msg, index=0, isNew, highlightRules=[], groups=[], onFilter, onMapClick, onDelete }) {
   const [expanded, setExpanded] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [reGeocoding, setReGeocoding] = useState(false);
@@ -92,16 +93,20 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
   return (
     <>
       <div
-        style={{ borderBottom:'1px solid var(--border-soft)', cursor:'pointer', transition:'background 0.1s',
+        style={{ borderBottom:'1px solid var(--border-soft)', cursor:'pointer', transition:'background 0.15s',
           background: isKeyAlert ? 'color-mix(in srgb, var(--accent-amber) 12%, var(--bg-0))'
                     : rowColor   ? `color-mix(in srgb, ${rowColor} 10%, var(--bg-0))`
+                    : hovered    ? 'var(--bg-2)'
                     : isNew      ? 'color-mix(in srgb, var(--accent-green) 4%, var(--bg-0))'
+                    : index % 2 === 1 ? 'var(--bg-1)'
                     : 'transparent',
           animation: isKeyAlert ? 'keyalert-blink 0.6s ease-in-out 5' : 'none' }}
         onClick={() => setExpanded(e => !e)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
         {/* ── DESKTOP row (hidden on mobile) ───────────────────── */}
-        <div className="msg-desktop" style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.42rem 0.75rem' }}>
+        <div className="msg-desktop" style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.5rem 0.75rem' }}>
           <span style={{ color:'var(--text-3)', flexShrink:0, lineHeight:1, width:'12px' }}>
             {expanded ? <ChevronDown size={11}/> : <ChevronRight size={11}/>}
           </span>
@@ -228,8 +233,9 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
 
         {/* ── Expanded detail ───────────────────────────────────── */}
         {expanded && (
-          <div style={{ padding:'0.5rem 0.75rem 0.75rem 0.75rem', background:'var(--bg-1)',
-            borderTop:'1px solid var(--border-soft)', animation:'fadeIn 0.15s ease-out' }}>
+          <div style={{ padding:'0.6rem 0.75rem 0.85rem 1rem', background:'var(--bg-2)',
+            borderTop:'1px solid var(--border)', borderBottom:'2px solid var(--border)',
+            borderLeft:'3px solid var(--accent-blue)', animation:'fadeIn 0.15s ease-out' }}>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))', gap:'0.5rem', marginBottom:'0.6rem' }}>
               <Field label="Capcode"   v={msg.capcode} mono />
               <Field label="Protocol"  v={`${msg.protocol} @ ${msg.baud ?? '?'}bps`} />

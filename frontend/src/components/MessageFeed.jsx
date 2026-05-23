@@ -100,6 +100,7 @@ export default function MessageFeed({ messages, highlightRules = [], groups = []
         return (
           <MessageRow key={msgId || i}
             msg={msg}
+            index={i}
             isNew={isNew}
             highlightRules={highlightRules}
             groups={groups}

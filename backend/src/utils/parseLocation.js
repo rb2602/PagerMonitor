@@ -87,6 +87,23 @@ function confScore({ hasKeyword, streetSim, hasCityHint, hasHouseNum, indexLoade
 // Slovenian prepositions that precede address phrases but are not part of them
 const SI_STOPWORDS = new Set(['v', 'na', 'pri', 'ob', 'za', 'do', 'od', 'k', 'iz', 'po', 's', 'z']);
 
+// Extended set used only for hint collection — filters common Slovenian words that
+// are NOT place names so they don't pollute the settlement disambiguation hints.
+const SI_HINT_STOPWORDS = new Set([
+  ...SI_STOPWORDS,
+  // conjunctions / particles
+  'je', 'so', 'in', 'ali', 'ter', 'da', 'ne', 'se', 'pa', 'ko', 'ker',
+  // emergency / dispatch words
+  'požar', 'gorenje', 'nesreča', 'prometna', 'intervencija',
+  'gasilci', 'reševalci', 'policija', 'nujno', 'pomoč', 'klic', 'alarm',
+  // vehicles / persons
+  'oseba', 'osebe', 'oseb', 'osebno', 'vozilo', 'vozila', 'vozilu', 'vozilom',
+  'motorist', 'kolesar', 'pešec',
+  // actions / objects frequently appearing near addresses
+  'padla', 'padel', 'gospa', 'gospod', 'odpiranje', 'vrat', 'steno',
+  'trčilo', 'stena', 'steni', 'stanovanju', 'stanovanjska',
+]);
+
 // ── SI-specific candidate extraction ─────────────────────────────────────────
 function siCandidates(text, country, countryCode) {
   // Strip punctuation attached to word ends (e.g. "stanovanju," → "stanovanju", "15," → "15")
@@ -168,19 +185,20 @@ function siCandidates(text, country, countryCode) {
       if (HOUSE_RE.test(words[j])) { houseNum = words[j]; houseIdx = j; break; }
     }
 
-    // Settlement hints: words before the street name (up to 3, no stopwords/punct)
+    // Settlement hints: words before the street name (up to 3, no hint-stopwords/punct)
     const hints = [];
     for (let j = beforeIdx - 1; j >= Math.max(0, beforeIdx - 3); j--) {
       const w = words[j];
       if (PUNCT_RE.test(w) || HOUSE_RE.test(w)) continue;
       if (SI_STOPWORDS.has(w.toLowerCase())) break;
+      if (SI_HINT_STOPWORDS.has(w.toLowerCase())) continue;
       if (/^[\p{L}]{2,}/u.test(w)) hints.unshift(w);
     }
     // Words after house number also carry settlement context (up to 2)
     for (let j = houseIdx + 1; j <= houseIdx + 2 && j < words.length; j++) {
       const w = words[j];
       if (PUNCT_RE.test(w)) continue;
-      if (!SI_STOPWORDS.has(w.toLowerCase()) && /^[\p{L}]{2,}/u.test(w)) hints.push(w);
+      if (!SI_HINT_STOPWORDS.has(w.toLowerCase()) && /^[\p{L}]{2,}/u.test(w)) hints.push(w);
     }
 
     addCandidate(streetPhrase, houseNum, true, hints);
@@ -207,7 +225,7 @@ function siCandidates(text, country, countryCode) {
         for (let j = startIdx - 1; j >= Math.max(0, startIdx - 4); j--) {
           const w = words[j];
           if (PUNCT_RE.test(w) || HOUSE_RE.test(w)) continue;
-          if (SI_STOPWORDS.has(w.toLowerCase())) continue;
+          if (SI_HINT_STOPWORDS.has(w.toLowerCase())) continue;
           if (/^[\p{L}]{2,}/u.test(w)) hints.unshift(w);
         }
 

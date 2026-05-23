@@ -289,7 +289,7 @@ function searchMessages(query, limit = 100) {
     LEFT JOIN groups  pg ON pg.id = g.parent_id
     WHERE messages_fts MATCH ?
     ORDER BY m.id DESC LIMIT ?
-  `).all(`"\${safe}"`, limit);
+  `).all(`"${safe}"`, limit);
 }
 
 function getMessageStats() {
