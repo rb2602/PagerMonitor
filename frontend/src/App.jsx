@@ -230,7 +230,8 @@ export default function App() {
           <div style={{ position:'absolute', inset:0, display: view === 'search' ? 'flex' : 'none', flexDirection:'column' }}>
             <SearchPanel results={searchResults} searching={searching}
               highlightRules={highlightRules} groups={groups}
-              onFilter={handleRowFilter}
+              onFilter={handleRowFilter} onMapClick={handleMapClick}
+              onDelete={id => setSearchResults(r => r?.filter(m => m.id !== id))}
               onClear={() => { setSearchResults(null); handleSetView('feed'); }} />
           </div>
           {view === 'admin' && (
