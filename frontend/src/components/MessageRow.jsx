@@ -277,7 +277,7 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
                         });
                         const data = await r.json();
                         if (data.ok) setGeoResult(data);
-                        else setGeoError(data.reason || 'Geocoding failed');
+                        else setGeoError(data.query ? `${data.reason || 'Geocoding failed'} | ${data.query}` : (data.reason || 'Geocoding failed'));
                       } catch (e) {
                         setGeoError(e.message);
                       } finally {
@@ -332,6 +332,9 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
                 {geoError && (
                   <div style={{ fontSize:'0.68rem', fontFamily:'monospace', color:'var(--accent-red,#ef4444)' }}>
                     {geoError}
+                    {geoError.includes('|') && (
+                      <span style={{ color:'var(--text-3)' }}> — tried: {geoError.split('|')[1]}</span>
+                    )}
                   </div>
                 )}
               </div>
