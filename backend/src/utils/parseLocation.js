@@ -55,16 +55,28 @@ function si() {
   return _si;
 }
 
+// Lazy-load place disambiguation index
+let _pi = null;
+function pi() {
+  if (!_pi) _pi = require('./placeIndex');
+  return _pi;
+}
+
 // ── Confidence scoring ────────────────────────────────────────────────────────
 // Returns 0..1. Candidates below CONF_MIN are discarded.
 const CONF_MIN = 0.55;
 
-function confScore({ hasKeyword, streetSim, hasCityHint, hasHouseNum, indexLoaded }) {
+function confScore({ hasKeyword, streetSim, hasCityHint, hasHouseNum, indexLoaded, placeConfidence = 0 }) {
   let s = 0;
-  s += hasKeyword   ? 0.25 : 0;
-  s += indexLoaded  ? streetSim * 0.35 : 0.15;  // neutral 0.15 when no index data
-  s += hasCityHint  ? 0.25 : 0;
-  s += hasHouseNum  ? 0.25 : 0;
+  s += hasKeyword  ? 0.25 : 0;
+  s += indexLoaded ? streetSim * 0.35 : 0.15;
+  if (placeConfidence > 0) {
+    // 0.10 base + up to 0.15 scaled by how confidently we disambiguated
+    s += 0.10 + placeConfidence * 0.15;
+  } else if (hasCityHint) {
+    s += 0.20;
+  }
+  s += hasHouseNum ? 0.25 : 0;
   return s;
 }
 
@@ -72,7 +84,7 @@ function confScore({ hasKeyword, streetSim, hasCityHint, hasHouseNum, indexLoade
 const SI_STOPWORDS = new Set(['v', 'na', 'pri', 'ob', 'za', 'do', 'od', 'k', 'iz', 'po', 's', 'z']);
 
 // ── SI-specific candidate extraction ─────────────────────────────────────────
-function siCandidates(text, country) {
+function siCandidates(text, country, countryCode) {
   // Strip punctuation attached to word ends (e.g. "stanovanju," → "stanovanju", "15," → "15")
   const clean  = text.replace(/([^\s])[,;:.!]+(?=\s|$)/g, '$1');
   const words  = clean.trim().split(/\s+/);
@@ -82,16 +94,22 @@ function siCandidates(text, country) {
   const seen   = new Set();
   const ranked = [];
 
-  function addCandidate(streetPhrase, houseNum, hasKeyword) {
+  function addCandidate(streetPhrase, houseNum, hasKeyword, hints = []) {
     const matches   = idx.matchStreet(streetPhrase, 10);
     const streetSim = matches.length ? matches[0].sim : 0;
+
+    // ── Place disambiguation ──────────────────────────────────────────────────
+    const placeMatch = hints.length
+      ? pi().disambiguate(hints, text, countryCode)
+      : null;
 
     const sc = confScore({
       hasKeyword,
       streetSim,
-      hasCityHint: !!cityHint,
+      hasCityHint: !!cityHint || !!placeMatch,
       hasHouseNum: !!houseNum,
       indexLoaded: hasIdx,
+      placeConfidence: placeMatch?.confidence || 0,
     });
     if (sc < CONF_MIN) return;
 
@@ -101,9 +119,21 @@ function siCandidates(text, country) {
       : streetPhrase;
 
     const parts = houseNum ? `${streetUsed} ${houseNum}` : streetUsed;
-    const query = cityHint
-      ? `${parts}, ${cityHint}, ${country}`
-      : `${parts}, ${country}`;
+
+    // Build Nominatim query: "Street Number, Settlement, Municipality, Country"
+    let query;
+    if (placeMatch) {
+      // Include municipality only when disambiguation is unambiguous enough
+      const addMuni = placeMatch.confidence >= 0.70 &&
+                      placeMatch.municipality !== placeMatch.name;
+      query = addMuni
+        ? `${parts}, ${placeMatch.name}, ${placeMatch.municipality}, ${country}`
+        : `${parts}, ${placeMatch.name}, ${country}`;
+    } else if (cityHint) {
+      query = `${parts}, ${cityHint}, ${country}`;
+    } else {
+      query = `${parts}, ${country}`;
+    }
 
     if (!seen.has(query)) { seen.add(query); ranked.push({ query, sc }); }
   }
@@ -112,25 +142,40 @@ function siCandidates(text, country) {
   for (let i = 0; i < words.length; i++) {
     if (!SUFFIX_RE.test(words[i])) continue;
 
-    // Take the one word immediately before the suffix (Slovenian street names are
-    // almost always "OneAdjective suffix"); skip punct, stop at prepositions
-    const before = [];
+    // Find the word immediately before the suffix (street adjective); track its index
+    let beforeWord = null, beforeIdx = -1;
     for (let j = i - 1; j >= 0; j--) {
       if (PUNCT_RE.test(words[j])) continue;
       if (SI_STOPWORDS.has(words[j].toLowerCase())) break;
-      before.unshift(words[j]);
-      break; // only the nearest word
+      beforeWord = words[j]; beforeIdx = j;
+      break;
     }
-    if (before.length === 0) continue;
+    if (!beforeWord) continue;
 
-    const streetPhrase = [...before, words[i]].join(' ');
+    const streetPhrase = `${beforeWord} ${words[i]}`;
 
-    let houseNum = null;
+    // House number: first suitable word after suffix (within 2 positions)
+    let houseNum = null, houseIdx = i;
     for (let j = i + 1; j <= i + 2 && j < words.length; j++) {
-      if (HOUSE_RE.test(words[j])) { houseNum = words[j]; break; }
+      if (HOUSE_RE.test(words[j])) { houseNum = words[j]; houseIdx = j; break; }
     }
 
-    addCandidate(streetPhrase, houseNum, true);
+    // Settlement hints: words before the street name (up to 3, no stopwords/punct)
+    const hints = [];
+    for (let j = beforeIdx - 1; j >= Math.max(0, beforeIdx - 3); j--) {
+      const w = words[j];
+      if (PUNCT_RE.test(w) || HOUSE_RE.test(w)) continue;
+      if (SI_STOPWORDS.has(w.toLowerCase())) break;
+      if (/^[\p{L}]{2,}/u.test(w)) hints.unshift(w);
+    }
+    // Words after house number also carry settlement context (up to 2)
+    for (let j = houseIdx + 1; j <= houseIdx + 2 && j < words.length; j++) {
+      const w = words[j];
+      if (PUNCT_RE.test(w)) continue;
+      if (!SI_STOPWORDS.has(w.toLowerCase()) && /^[\p{L}]{2,}/u.test(w)) hints.push(w);
+    }
+
+    addCandidate(streetPhrase, houseNum, true, hints);
   }
 
   // Strategy 2: house-number window (for messages without suffix keyword)
@@ -213,7 +258,7 @@ function parseLocation(text, countryCode = 'si') {
 
   const country    = COUNTRY_NAMES[countryCode] || countryCode.toUpperCase();
   const candidates = countryCode === 'si'
-    ? siCandidates(text, country)
+    ? siCandidates(text, country, countryCode)
     : legacyCandidates(text, country);
 
   if (candidates.length > 0) return { lat: null, lng: null, candidates };
@@ -235,8 +280,8 @@ function _enqueue(work) {
 
 async function geocodeAddress(candidates, countryCode = 'si') {
   const queries = Array.isArray(candidates) ? candidates : [candidates].filter(Boolean);
-  // Candidates are pre-validated and sorted by confidence; limit to first 3
-  const toTry = queries.slice(0, 3).filter(q => q?.trim());
+  // Candidates are pre-ranked by confidence; one well-formed query is enough
+  const toTry = queries.slice(0, 1).filter(q => q?.trim());
 
   for (const query of toTry) {
     const key = `${query}|${countryCode}`;

@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const os      = require('os');
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 const { version } = require('../../package.json');
 
 const { requireAdmin, requireEditor } = require('../services/auth');
@@ -295,6 +295,59 @@ router.put('/site-settings', adminOnly, (req, res) => {
     addAuditLog(req.session?.username||'admin', 'site.settings', `publicMode=${!!publicMode}`);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Geo data download (SSE) ───────────────────────────────────────────────────
+// Streams stdout/stderr from fetchStreets.js + fetchPlaces.js back to the browser.
+// Uses fetch()-streaming on the frontend (not EventSource) so Bearer auth works.
+router.get('/geo-data/fetch', adminOnly, (req, res) => {
+  const cc = /^[a-z]{2}$/.test(req.query.cc || '') ? req.query.cc : 'si';
+
+  res.setHeader('Content-Type',  'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection',    'keep-alive');
+  res.flushHeaders();
+
+  const send = obj => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+
+  // Keepalive so the connection survives the ~60 s download window
+  const hb = setInterval(() => { if (!res.writableEnded) res.write(': ping\n\n'); }, 20_000);
+  req.on('close', () => clearInterval(hb));
+
+  const scriptsDir = require('path').join(__dirname, '../../scripts');
+
+  function runScript(file, onDone) {
+    send({ type: 'log', text: `\n▶ ${file}\n` });
+    const child = spawn('node', [require('path').join(scriptsDir, file), cc], {
+      cwd: require('path').join(__dirname, '../../'),
+    });
+    child.stdout.on('data', d => send({ type: 'log', text: d.toString() }));
+    child.stderr.on('data', d => send({ type: 'log', text: d.toString() }));
+    child.on('close', code => {
+      if (code !== 0) {
+        send({ type: 'error', text: `${file} exited with code ${code}` });
+        clearInterval(hb);
+        res.end();
+      } else {
+        onDone();
+      }
+    });
+    child.on('error', err => {
+      send({ type: 'error', text: err.message });
+      clearInterval(hb);
+      res.end();
+    });
+  }
+
+  runScript('fetchStreets.js', () => {
+    runScript('fetchPlaces.js', () => {
+      send({ type: 'done' });
+      clearInterval(hb);
+      res.end();
+    });
+  });
+
+  addAuditLog(req.session?.username || 'admin', 'geo.fetch', `cc=${cc}`);
 });
 
 // ── Client key ────────────────────────────────────────────────────────────────

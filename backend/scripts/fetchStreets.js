@@ -2,25 +2,39 @@
 'use strict';
 
 /**
- * Downloads all named street ways within Slovenia's bounding box from the
- * Overpass API and saves a deduplicated, sorted JSON array to
- * backend/data/si_streets.json.
+ * Downloads all named street ways within the given country's bounding box from
+ * the Overpass API and saves a deduplicated, sorted JSON array to
+ * backend/data/<cc>_streets.json.
  *
- * Run once (or periodically) to populate the street prefix index:
- *   node backend/scripts/fetchStreets.js
+ * Usage:
+ *   node backend/scripts/fetchStreets.js [cc]   (default: si)
  *
  * Requires Node >=18. Takes ~30-90 s depending on network.
  */
 
 const fs   = require('fs');
 const path = require('path');
-const http  = require('https');
+const http = require('https');
 
-const OUT = path.join(__dirname, '../data/si_streets.json');
+// Country code from CLI argument (e.g. "node fetchStreets.js de")
+const CC = (process.argv[2] || 'si').toLowerCase().replace(/[^a-z]/g, '').slice(0, 2);
 
-// Bounding box for Slovenia (avoids unreliable area() pipeline on Overpass mirrors)
-// bbox order: south,west,north,east
-const QUERY = `[out:json][timeout:120][bbox:45.42,13.38,46.88,16.61];
+const BBOXES = {
+  si: '45.42,13.38,46.88,16.61',
+  hr: '42.39,13.49,46.55,19.45',
+  de: '47.27,5.87,55.06,15.04',
+  at: '46.37,9.53,49.02,17.16',
+  it: '35.49,6.63,47.10,18.52',
+  ch: '45.82,5.96,47.81,10.49',
+  fr: '41.34,-5.14,51.09,9.56',
+  gb: '49.87,-8.62,60.86,1.77',
+  pl: '49.00,14.12,54.84,24.15',
+  hu: '45.74,16.11,48.59,22.90',
+};
+const BBOX = BBOXES[CC] || BBOXES.si;
+const OUT  = path.join(__dirname, `../data/${CC}_streets.json`);
+
+const QUERY = `[out:json][timeout:120][bbox:${BBOX}];
 way["highway"]["name"];
 out tags;`;
 
@@ -67,8 +81,8 @@ function postOverpass(host, query) {
 }
 
 async function main() {
-  console.log('Fetching Slovenian street data from Overpass API...');
-  console.log('Query: bounding box 45.42,13.38 → 46.88,16.61\n');
+  console.log(`Fetching street data for [${CC.toUpperCase()}] from Overpass API...`);
+  console.log(`bbox: ${BBOX}\n`);
 
   let json = null;
   for (const host of ENDPOINTS) {
@@ -91,8 +105,9 @@ async function main() {
     json.elements
       .map(e => e.tags?.name)
       .filter(n => typeof n === 'string' && n.trim().length > 2),
-  )].sort((a, b) => a.localeCompare(b, 'sl'));
+  )].sort((a, b) => a.localeCompare(b, CC));
 
+  fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(names));
   const rel = path.relative(process.cwd(), OUT);
   console.log(`\nSaved ${names.length} unique street names to ${rel}`);

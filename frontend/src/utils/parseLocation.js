@@ -51,16 +51,22 @@ function detectCity(text) {
 // Threshold 0.40 (lower than backend since no index data available)
 const FE_CONF_MIN = 0.40;
 
-function feScore({ hasKeyword, hasCityHint, hasHouseNum }) {
+function feScore({ hasKeyword, hasCityHint, hasHouseNum, hasHint }) {
   let s = 0;
-  s += hasKeyword   ? 0.35 : 0;
-  s += hasCityHint  ? 0.30 : 0;
-  s += hasHouseNum  ? 0.25 : 0;
+  s += hasKeyword  ? 0.35 : 0;
+  s += hasCityHint ? 0.30 : (hasHint ? 0.12 : 0); // any settlement hint still helps
+  s += hasHouseNum ? 0.25 : 0;
   return s;
 }
 
-// Slovenian prepositions that precede address phrases but are not part of them
-const SI_STOPWORDS_FE = new Set(['v', 'na', 'pri', 'ob', 'za', 'do', 'od', 'k', 'iz', 'po', 's', 'z']);
+// Words that appear in Slovenian emergency messages but are not part of addresses
+const SI_STOPWORDS_FE = new Set([
+  'v', 'na', 'pri', 'ob', 'za', 'do', 'od', 'k', 'iz', 'po', 's', 'z',
+  'je', 'so', 'in', 'ali', 'ter', 'da', 'ne', 'se', 'pa', 'ko',
+  'požar', 'gorenje', 'nesreča', 'prometna', 'intervencija',
+  'gasilci', 'reševalci', 'policija', 'nujno', 'pomoč', 'klic', 'alarm',
+  'km', 'm', 'ha',
+]);
 
 // ── SI-specific candidate extraction (frontend, no prefix index) ──────────────
 function siCandidatesFE(text, country) {
@@ -71,12 +77,19 @@ function siCandidatesFE(text, country) {
   const seen     = new Set();
   const ranked   = [];
 
-  function add(streetPhrase, houseNum, hasKeyword) {
-    const sc = feScore({ hasKeyword, hasCityHint: !!cityHint, hasHouseNum: !!houseNum });
+  function add(streetPhrase, houseNum, hasKeyword, hints = []) {
+    // Prefer a known city; fall back to any extracted settlement hint
+    const settlement = cityHint || hints[0] || null;
+    const sc = feScore({
+      hasKeyword,
+      hasCityHint: !!cityHint,
+      hasHouseNum: !!houseNum,
+      hasHint:     hints.length > 0,
+    });
     if (sc < FE_CONF_MIN) return;
     const parts = houseNum ? `${streetPhrase} ${houseNum}` : streetPhrase;
-    const query = cityHint
-      ? `${parts}, ${cityHint}, ${country}`
+    const query = settlement
+      ? `${parts}, ${settlement}, ${country}`
       : `${parts}, ${country}`;
     if (!seen.has(query)) { seen.add(query); ranked.push({ query, sc }); }
   }
@@ -84,22 +97,38 @@ function siCandidatesFE(text, country) {
   // Strategy 1: keyword windows
   for (let i = 0; i < words.length; i++) {
     if (!SUFFIX_RE.test(words[i])) continue;
-    // Take only the one word immediately before the suffix
-    const before = [];
+
+    // Word immediately before the suffix; track its index for hint extraction
+    let beforeWord = null, beforeIdx = -1;
     for (let j = i - 1; j >= 0; j--) {
       if (PUNCT_RE.test(words[j])) continue;
       if (SI_STOPWORDS_FE.has(words[j].toLowerCase())) break;
-      before.unshift(words[j]);
+      beforeWord = words[j]; beforeIdx = j;
       break;
     }
-    if (before.length === 0) continue;
+    if (!beforeWord) continue;
 
-    const streetPhrase = [...before, words[i]].join(' ');
-    let houseNum = null;
+    const streetPhrase = `${beforeWord} ${words[i]}`;
+    let houseNum = null, houseIdx = i;
     for (let j = i + 1; j <= i + 2 && j < words.length; j++) {
-      if (HOUSE_RE.test(words[j])) { houseNum = words[j]; break; }
+      if (HOUSE_RE.test(words[j])) { houseNum = words[j]; houseIdx = j; break; }
     }
-    add(streetPhrase, houseNum, true);
+
+    // Collect settlement hints from surrounding context
+    const hints = [];
+    for (let j = beforeIdx - 1; j >= Math.max(0, beforeIdx - 3); j--) {
+      const w = words[j];
+      if (PUNCT_RE.test(w) || HOUSE_RE.test(w)) continue;
+      if (SI_STOPWORDS_FE.has(w.toLowerCase())) break;
+      if (/^[\p{L}]{2,}/u.test(w)) hints.unshift(w);
+    }
+    for (let j = houseIdx + 1; j <= houseIdx + 2 && j < words.length; j++) {
+      const w = words[j];
+      if (PUNCT_RE.test(w)) continue;
+      if (!SI_STOPWORDS_FE.has(w.toLowerCase()) && /^[\p{L}]{2,}/u.test(w)) hints.push(w);
+    }
+
+    add(streetPhrase, houseNum, true, hints);
   }
 
   // Strategy 2: house-number window fallback
@@ -211,8 +240,8 @@ export async function geocodeAddress(loc, countryCode = 'si') {
     ? loc.candidates
     : [typeof loc === 'string' ? loc : loc?.geoQuery || loc?.raw].filter(Boolean);
 
-  // Only try the first 3 pre-validated candidates
-  const toTry = queries.slice(0, 3).filter(q => q?.trim());
+  // One pre-ranked candidate is enough — avoids extra Nominatim calls
+  const toTry = queries.slice(0, 1).filter(q => q?.trim());
 
   for (const query of toTry) {
     const key = `${query}|${countryCode}`;
