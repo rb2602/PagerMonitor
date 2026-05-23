@@ -200,8 +200,7 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
                 border:'1px solid color-mix(in srgb,var(--accent-amber) 22%,transparent)' }}>
               {msg.capcode}
             </span>
-            {alias     && <Badge label={alias}     color={aliasColor} onClick={() => onFilter?.('alias',alias)} />}
-            {groupName && <Badge label={groupName} color={groupColor} onClick={() => onFilter?.('group',groupName)} />}
+
             <span style={{ flex:1 }} />
             {showMapButton && hasLocation && (
               <span onClick={e => { e.stopPropagation(); onMapClick?.(msg); }}
@@ -209,6 +208,10 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
                 <MapPin size={12}/>
               </span>
             )}
+            <br>
+            {alias     && <Badge label={alias}     color={aliasColor} onClick={() => onFilter?.('alias',alias)} />}
+            {groupName && <Badge label={groupName} color={groupColor} onClick={() => onFilter?.('group',groupName)} />}
+            </br>
             <span onClick={e => { e.stopPropagation(); setShowNotes(n => !n); }}
               title={msg.note_count > 0 ? `${msg.note_count} notes` : 'Add note'}
               style={{ cursor:'pointer', lineHeight:1, padding:'0.1rem', position:'relative',

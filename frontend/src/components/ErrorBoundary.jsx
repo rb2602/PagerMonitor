@@ -12,7 +12,7 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    console.error('PageMon component error:', error, info);
+    console.error('PagerMonitor component error:', error, info);
   }
 
   render() {
