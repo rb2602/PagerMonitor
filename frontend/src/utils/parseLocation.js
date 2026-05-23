@@ -51,12 +51,11 @@ function detectCity(text) {
 // Threshold 0.40 (lower than backend since no index data available)
 const FE_CONF_MIN = 0.40;
 
-function feScore({ hasKeyword, hasCityHint, hasHouseNum, hasHint, hasMultipleHints = false, phraseWords = 1 }) {
+function feScore({ hasKeyword, hasCityHint, hasHouseNum, hasHint, hasMultipleHints = false }) {
   let s = 0;
   s += hasKeyword  ? 0.35 : 0;
   s += hasCityHint ? 0.30 : (hasMultipleHints ? 0.20 : (hasHint ? 0.12 : 0));
   s += hasHouseNum ? 0.25 : 0;
-  s += phraseWords > 1 ? Math.min(0.10, (phraseWords - 1) * 0.06) : 0;
   return s;
 }
 
@@ -82,7 +81,7 @@ function siCandidatesFE(text, country) {
   const seen     = new Set();
   const ranked   = [];
 
-  function add(streetPhrase, houseNum, hasKeyword, hints = [], phraseWords = 1) {
+  function add(streetPhrase, houseNum, hasKeyword, hints = []) {
     // Use most proximate hints (last elements) — closest to the address in the message
     const settlement = cityHint || (hints.length > 0 ? hints.slice(-2).join(' ') : null);
     const sc = feScore({
@@ -90,8 +89,7 @@ function siCandidatesFE(text, country) {
       hasCityHint:     !!cityHint,
       hasHouseNum:     !!houseNum,
       hasHint:         hints.length > 0,
-      hasMultipleHints: hints.length >= 1,
-      phraseWords,
+      hasMultipleHints: hints.length >= 2,
     });
     if (sc < FE_CONF_MIN) return;
     const parts = houseNum ? `${streetPhrase} ${houseNum}` : streetPhrase;
@@ -160,10 +158,10 @@ function siCandidatesFE(text, country) {
         }
 
         const hasSuffix = SUFFIX_RE.test(chunk[chunk.length - 1]);
-        add(chunk.join(' '), words[numIdx], hasSuffix, hints, chunk.length);
+        add(chunk.join(' '), words[numIdx], hasSuffix, hints);
 
         if (rawChunk.length > chunk.length) {
-          add(rawChunk.join(' '), words[numIdx], hasSuffix, hints, rawChunk.length);
+          add(rawChunk.join(' '), words[numIdx], hasSuffix, hints);
         }
       }
     }
