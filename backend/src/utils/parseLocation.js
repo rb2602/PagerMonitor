@@ -66,7 +66,7 @@ function pi() {
 // Returns 0..1. Candidates below CONF_MIN are discarded.
 const CONF_MIN = 0.55;
 
-function confScore({ hasKeyword, streetSim, hasCityHint, hasHouseNum, indexLoaded, placeConfidence = 0, hasMultipleContext = false }) {
+function confScore({ hasKeyword, streetSim, hasCityHint, hasHouseNum, indexLoaded, placeConfidence = 0, hasMultipleContext = false, phraseWords = 1 }) {
   let s = 0;
   s += hasKeyword  ? 0.25 : 0;
   // Floor of 0.10 prevents the index penalising settlement names (streetSim≈0)
@@ -77,10 +77,13 @@ function confScore({ hasKeyword, streetSim, hasCityHint, hasHouseNum, indexLoade
   } else if (hasCityHint) {
     s += 0.20;
   } else if (hasMultipleContext) {
-    // 2+ proximate context words (e.g. DOBROVA-POLHOV GRADEC) ≈ city hint strength
+    // 1+ proximate context word ≈ city hint strength
     s += 0.20;
   }
   s += hasHouseNum ? 0.25 : 0;
+  // Prefer longer address phrases (more words = more complete) — breaks score ties
+  // so "SMREČJE V ČRNI 3" ranks above bare "ČRNI 3" from the same message.
+  s += phraseWords > 1 ? Math.min(0.10, (phraseWords - 1) * 0.06) : 0;
   return s;
 }
 
@@ -115,7 +118,7 @@ function siCandidates(text, country, countryCode) {
   const seen   = new Set();
   const ranked = [];
 
-  function addCandidate(streetPhrase, houseNum, hasKeyword, hints = []) {
+  function addCandidate(streetPhrase, houseNum, hasKeyword, hints = [], phraseWords = 1) {
     const matches   = idx.matchStreet(streetPhrase, 10);
     const streetSim = matches.length ? matches[0].sim : 0;
 
@@ -131,7 +134,8 @@ function siCandidates(text, country, countryCode) {
       hasHouseNum: !!houseNum,
       indexLoaded: hasIdx,
       placeConfidence: placeMatch?.confidence || 0,
-      hasMultipleContext: hints.length >= 2,
+      hasMultipleContext: hints.length >= 1,
+      phraseWords,
     });
     if (sc < CONF_MIN) return;
 
@@ -232,13 +236,15 @@ function siCandidates(text, country, countryCode) {
         }
 
         const hasSuffix = SUFFIX_RE.test(chunk[chunk.length - 1]);
-        addCandidate(chunk.join(' '), words[numIdx], hasSuffix, hints);
+        addCandidate(chunk.join(' '), words[numIdx], hasSuffix, hints, chunk.length);
 
         // Also try the raw chunk (prepositions kept) for streets like
         // "Ob potoku", "Pod lipami", "K potoku" where the preposition is
         // part of the official street name.
+        // Pass rawChunk.length so the preposition-inclusive form ranks higher
+        // (it is more specific and correct for Nominatim).
         if (rawChunk.length > chunk.length) {
-          addCandidate(rawChunk.join(' '), words[numIdx], hasSuffix, hints);
+          addCandidate(rawChunk.join(' '), words[numIdx], hasSuffix, hints, rawChunk.length);
         }
       }
     }
