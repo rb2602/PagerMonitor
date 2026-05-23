@@ -6,6 +6,9 @@ const path = require('path');
 // countryCode → Map<normKey → [{name, municipality, lat, lng}]> | null
 const _indexes = new Map();
 
+// countryCode → compiled RegExp (city names where name===municipality) | null
+const _cityRegexCache = new Map();
+
 // Same normalization as streetIndex for consistency
 function _norm(s) {
   return s.toLowerCase()
@@ -96,4 +99,31 @@ function disambiguate(hints, messageText, countryCode = 'si') {
   return null;
 }
 
-module.exports = { disambiguate, lookupWord, hasData };
+/**
+ * Build (and cache) a regex matching all municipality-center names for the given
+ * country — i.e. entries where name === municipality after normalization.
+ * Returns null when the index hasn't been downloaded yet.
+ */
+function buildCityRegex(countryCode = 'si') {
+  if (_cityRegexCache.has(countryCode)) return _cityRegexCache.get(countryCode);
+  const idx = _getIndex(countryCode);
+  if (!idx) { _cityRegexCache.set(countryCode, null); return null; }
+
+  const cityNames = new Set();
+  for (const entries of idx.values()) {
+    for (const m of entries) {
+      if (_norm(m.name) === _norm(m.municipality)) cityNames.add(m.name);
+    }
+  }
+
+  if (cityNames.size === 0) { _cityRegexCache.set(countryCode, null); return null; }
+
+  const pattern = [...cityNames]
+    .map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'))
+    .join('|');
+  const re = new RegExp(`(?<!\\p{L})(${pattern})(?!\\p{L})`, 'iu');
+  _cityRegexCache.set(countryCode, re);
+  return re;
+}
+
+module.exports = { disambiguate, lookupWord, hasData, buildCityRegex };

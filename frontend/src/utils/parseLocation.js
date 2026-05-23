@@ -27,6 +27,7 @@ const HOUSE_RE  = /^\d{1,4}[a-zA-Z]?$/;
 const PUNCT_RE  = /^[-–—,;:.()\[\]/\\]+$/;
 
 const SI_CITIES = [
+  // Major cities (original list)
   'Ljubljana', 'Maribor', 'Celje', 'Kranj', 'Koper', 'Novo Mesto', 'Nova Gorica',
   'Velenje', 'Krško', 'Slovenj Gradec', 'Murska Sobota', 'Ptuj', 'Domžale',
   'Škofja Loka', 'Trbovlje', 'Kamnik', 'Izola', 'Piran', 'Postojna',
@@ -34,6 +35,32 @@ const SI_CITIES = [
   'Jesenice', 'Radovljica', 'Gornja Radgona', 'Ormož', 'Zagorje ob Savi',
   'Idrija', 'Tolmin', 'Tržič', 'Žalec', 'Laško', 'Šentjur', 'Rogaška Slatina',
   'Šempeter pri Gorici', 'Ruše', 'Ravne na Koroškem', 'Hrastnik',
+  // Municipality centers not in original list
+  'Škofljica', 'Medvode', 'Mengeš', 'Komenda', 'Vodice', 'Trzin', 'Ig',
+  'Brezovica', 'Borovnica', 'Horjul', 'Dobrova', 'Log pri Brezovici',
+  'Lukovica', 'Moravče', 'Šmartno pri Litiji', 'Ivančna Gorica',
+  'Trebnje', 'Mirna', 'Šentrupert', 'Mokronog', 'Šmarješke Toplice',
+  'Šentjernej', 'Kostanjevica na Krki', 'Straža', 'Dolenjske Toplice',
+  'Črnomelj', 'Metlika', 'Semič', 'Kočevje', 'Ribnica', 'Sodražica',
+  'Loški Potok', 'Osilnica', 'Ilirska Bistrica', 'Pivka', 'Cerknica',
+  'Bloke', 'Loška Dolina', 'Logatec', 'Vrhnika',
+  'Medvode', 'Šempeter-Vrtojba', 'Miren-Kostanjevica', 'Renče-Vogrsko',
+  'Kanal', 'Kanal ob Soči', 'Bovec', 'Kobarid', 'Zreče', 'Vitanje',
+  'Šoštanj', 'Mozirje', 'Nazarje', 'Gornji Grad', 'Rečica ob Savinji',
+  'Ljubno', 'Luče', 'Solčava', 'Braslovče', 'Polzela', 'Štore',
+  'Šentilj', 'Lenart', 'Kungota', 'Pesnica', 'Hoče-Slivnica',
+  'Miklavž na Dravskem Polju', 'Duplek', 'Starše', 'Hajdina',
+  'Markovci', 'Kidričevo', 'Majšperk', 'Videm', 'Podlehnik',
+  'Žetale', 'Cirkulane', 'Zavrč', 'Središče ob Dravi',
+  'Sveti Tomaž', 'Benedikt', 'Sveta Ana', 'Cerkvenjak',
+  'Sveti Andraž v Slovenskih Goricah', 'Sveta Trojica v Slovenskih Goricah',
+  'Destrnik', 'Trnovska vas', 'Dornava', 'Juršinci', 'Sveti Jurij ob Ščavnici',
+  'Razkrižje', 'Veržej', 'Beltinci', 'Lendava', 'Dobrovnik', 'Moravske Toplice',
+  'Kuzma', 'Rogašovci', 'Cankova', 'Grad', 'Hodoš', 'Šalovci',
+  'Križevci', 'Ljutomer', 'Sveti Jurij v Slovenskih Goricah',
+  'Apače', 'Radenci', 'Gornja Radgona', 'Šentilj', 'Sl. Konjice', 'Slovenska Konjice',
+  'Mislinja', 'Podvelka', 'Radlje ob Dravi', 'Ribnica na Pohorju',
+  'Vuzenica', 'Muta', 'Lovrenc na Pohorju', 'Rače-Fram', 'Selnica ob Dravi',
 ];
 
 const _cityPat = SI_CITIES
@@ -41,6 +68,12 @@ const _cityPat = SI_CITIES
   .join('|');
 // Use Unicode-aware boundaries so diacritic-initial names (Škofja Loka, etc.) match
 const CITY_RE = new RegExp(`(?<!\\p{L})(${_cityPat})(?!\\p{L})`, 'iu');
+
+function normSI(s) {
+  return s.toLowerCase()
+    .replace(/[šŠ]/g, 's').replace(/[čČ]/g, 'c').replace(/[žŽ]/g, 'z')
+    .replace(/[ćĆ]/g, 'c').replace(/[đĐ]/g, 'd');
+}
 
 function detectCity(text) {
   const m = CITY_RE.exec(text);
@@ -81,7 +114,7 @@ function siCandidatesFE(text, country) {
   const seen     = new Set();
   const ranked   = [];
 
-  function add(streetPhrase, houseNum, hasKeyword, hints = []) {
+  function add(streetPhrase, houseNum, hasKeyword, hints = [], rawBonus = 0) {
     // Use most proximate hints (last elements) — closest to the address in the message
     const settlement = cityHint || (hints.length > 0 ? hints.slice(-2).join(' ') : null);
     const sc = feScore({
@@ -91,12 +124,12 @@ function siCandidatesFE(text, country) {
       hasHint:         hints.length > 0,
       hasMultipleHints: hints.length >= 2,
     });
-    if (sc < FE_CONF_MIN) return;
+    if (sc + rawBonus < FE_CONF_MIN) return;
     const parts = houseNum ? `${streetPhrase} ${houseNum}` : streetPhrase;
     const query = settlement
       ? `${parts}, ${settlement}, ${country}`
       : `${parts}, ${country}`;
-    if (!seen.has(query)) { seen.add(query); ranked.push({ query, sc }); }
+    if (!seen.has(query)) { seen.add(query); ranked.push({ query, sc: sc + rawBonus }); }
   }
 
   // Strategy 1: keyword windows
@@ -143,11 +176,19 @@ function siCandidatesFE(text, country) {
       if (HOUSE_RE.test(words[i])) { numIdx = i; break; }
     }
     if (numIdx >= 1) {
+      const cityFirstWords = cityHint ? normSI(cityHint).split(/\s+/) : [];
+
       for (let width = 1; width <= Math.min(4, numIdx); width++) {
         const startIdx = numIdx - width;
         const rawChunk = words.slice(startIdx, numIdx).filter(w => !PUNCT_RE.test(w));
         const chunk    = rawChunk.filter(w => !SI_STOPWORDS_FE.has(w.toLowerCase()));
         if (chunk.length === 0) continue;
+
+        // Skip widths where chunk starts with the city name
+        if (cityFirstWords.length > 0 && chunk.length > cityFirstWords.length) {
+          const chunkNorm = chunk.map(w => normSI(w));
+          if (cityFirstWords.every((w, i) => chunkNorm[i] === w)) continue;
+        }
 
         const hints = [];
         for (let j = startIdx - 1; j >= Math.max(0, startIdx - 4); j--) {
@@ -161,7 +202,7 @@ function siCandidatesFE(text, country) {
         add(chunk.join(' '), words[numIdx], hasSuffix, hints);
 
         if (rawChunk.length > chunk.length) {
-          add(rawChunk.join(' '), words[numIdx], hasSuffix, hints);
+          add(rawChunk.join(' '), words[numIdx], hasSuffix, hints, rawChunk.length * 0.01);
         }
       }
     }

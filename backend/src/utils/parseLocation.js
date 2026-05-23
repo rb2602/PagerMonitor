@@ -43,7 +43,23 @@ const _cityPattern = SI_CITIES
 // Use Unicode-aware boundaries so diacritic-initial names (Škofja Loka, etc.) match
 const CITY_RE = new RegExp(`(?<!\\p{L})(${_cityPattern})(?!\\p{L})`, 'iu');
 
-function detectCity(text) {
+// Normalize Slovenian diacritics for comparison (mirrors streetIndex/_norm)
+function normSI(s) {
+  return s.toLowerCase()
+    .replace(/[šŠ]/g, 's').replace(/[čČ]/g, 'c').replace(/[žŽ]/g, 'z')
+    .replace(/[ćĆ]/g, 'c').replace(/[đĐ]/g, 'd');
+}
+
+function detectCity(text, countryCode) {
+  // Try dynamic regex built from place index first (covers all municipality centers)
+  if (countryCode) {
+    const dynRe = pi().buildCityRegex(countryCode);
+    if (dynRe) {
+      const m = dynRe.exec(text);
+      if (m) return m[1];
+    }
+  }
+  // Fall back to hardcoded list for when place data hasn't been downloaded yet
   const m = CITY_RE.exec(text);
   return m ? m[1] : null;
 }
@@ -111,11 +127,11 @@ function siCandidates(text, country, countryCode) {
   const words  = clean.trim().split(/\s+/);
   const idx    = si();
   const hasIdx = idx.hasData();
-  const cityHint = detectCity(text);
+  const cityHint = detectCity(text, countryCode);
   const seen   = new Set();
   const ranked = [];
 
-  function addCandidate(streetPhrase, houseNum, hasKeyword, hints = []) {
+  function addCandidate(streetPhrase, houseNum, hasKeyword, hints = [], rawBonus = 0) {
     const matches   = idx.matchStreet(streetPhrase, 10);
     const streetSim = matches.length ? matches[0].sim : 0;
 
@@ -133,7 +149,7 @@ function siCandidates(text, country, countryCode) {
       placeConfidence: placeMatch?.confidence || 0,
       hasMultipleContext: hints.length >= 2,
     });
-    if (sc < CONF_MIN) return;
+    if (sc + rawBonus < CONF_MIN) return;
 
     // Use corrected index name for diacritics/typo fixing; keep original if no strong match.
     // 0.90 threshold for both cases — diacritics fixes normalize to sim=1.0 anyway,
@@ -162,7 +178,7 @@ function siCandidates(text, country, countryCode) {
       query = `${parts}, ${country}`;
     }
 
-    if (!seen.has(query)) { seen.add(query); ranked.push({ query, sc }); }
+    if (!seen.has(query)) { seen.add(query); ranked.push({ query, sc: sc + rawBonus }); }
   }
 
   // Strategy 1: keyword windows (cesta/ulica/trg/...)
@@ -214,11 +230,22 @@ function siCandidates(text, country, countryCode) {
     }
 
     if (numIdx >= 1) {
+      // Pre-normalize cityHint words once for city-prefix checks
+      const cityFirstWords = cityHint ? normSI(cityHint).split(/\s+/) : [];
+
       for (let width = 1; width <= Math.min(4, numIdx); width++) {
         const startIdx = numIdx - width;
         const rawChunk = words.slice(startIdx, numIdx).filter(w => !PUNCT_RE.test(w));
         const chunk    = rawChunk.filter(w => !SI_STOPWORDS.has(w.toLowerCase()));
         if (chunk.length === 0) continue;
+
+        // Skip widths where the chunk starts with the detected city name — the city
+        // belongs in the settlement context, not as part of the street phrase.
+        // e.g. "KAMNIK SMREČJE V ČRNI 3": skip width=4 where chunk=['KAMNIK','SMREČJE','ČRNI']
+        if (cityFirstWords.length > 0 && chunk.length > cityFirstWords.length) {
+          const chunkNorm = chunk.map(w => normSI(w));
+          if (cityFirstWords.every((w, i) => chunkNorm[i] === w)) continue;
+        }
 
         // Collect settlement hints from words before this chunk.
         // Use continue (not break) on stopwords so a settlement like ŠKOFLJICA
@@ -235,10 +262,10 @@ function siCandidates(text, country, countryCode) {
         addCandidate(chunk.join(' '), words[numIdx], hasSuffix, hints);
 
         // Also try the raw chunk (prepositions kept) for streets like
-        // "Ob potoku", "Pod lipami", "K potoku" where the preposition is
-        // part of the official street name.
+        // "Ob potoku", "Smrečje v Črni" where the preposition is part of the name.
+        // Give it a small bonus so it ranks above the stripped-preposition version.
         if (rawChunk.length > chunk.length) {
-          addCandidate(rawChunk.join(' '), words[numIdx], hasSuffix, hints);
+          addCandidate(rawChunk.join(' '), words[numIdx], hasSuffix, hints, rawChunk.length * 0.01);
         }
       }
     }
