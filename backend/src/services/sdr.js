@@ -508,7 +508,7 @@ function spawnDonglePipeline(dongle, label, myGen) {
       state.running = false;
       state.error   = 'rtl_fm stalled';
       broadcastDongleStatus();
-      if (!stopping) scheduleRestart();
+      if (!stopping && !donglePipelines.some(p => p.state !== state && p.rtlProc && p.rtlProc.exitCode === null)) scheduleRestart();
     }
   }, 10000);
 
@@ -531,6 +531,8 @@ function spawnDonglePipeline(dongle, label, myGen) {
     }
   });
 
+  const otherPipelinesAlive = () => donglePipelines.some(p => p.state !== state && p.rtlProc && p.rtlProc.exitCode === null);
+
   const onExit = (src) => (c, s) => {
     if (myGen !== generation) return;
     logger.info(`${label} ${src} exited (${c}/${s})`);
@@ -538,13 +540,13 @@ function spawnDonglePipeline(dongle, label, myGen) {
       state.running = false;
       state.error   = `${src} exited (${c}/${s})`;
       broadcastDongleStatus();
-      scheduleRestart();
+      if (!otherPipelinesAlive()) scheduleRestart();
     }
   };
   rtl.on('exit',  onExit('rtl_fm'));
   mmon.on('exit', onExit('multimon-ng'));
-  rtl.on('error',  e => { if (myGen !== generation) return; logger.error(`${label} rtl_fm: ${e.message}`);  state.running = false; state.error = e.message; if (!stopping) { broadcastDongleStatus(); scheduleRestart(); } });
-  mmon.on('error', e => { if (myGen !== generation) return; logger.error(`${label} mmon: ${e.message}`);     state.running = false; state.error = e.message; if (!stopping) { broadcastDongleStatus(); scheduleRestart(); } });
+  rtl.on('error',  e => { if (myGen !== generation) return; logger.error(`${label} rtl_fm: ${e.message}`);  state.running = false; state.error = e.message; if (!stopping) { broadcastDongleStatus(); if (!otherPipelinesAlive()) scheduleRestart(); } });
+  mmon.on('error', e => { if (myGen !== generation) return; logger.error(`${label} mmon: ${e.message}`);     state.running = false; state.error = e.message; if (!stopping) { broadcastDongleStatus(); if (!otherPipelinesAlive()) scheduleRestart(); } });
 
   return { rtlProc: rtl, mmonProc: mmon, cfg: dongle, label, state, watchdog };
 }
