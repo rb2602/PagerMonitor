@@ -208,10 +208,9 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
                 <MapPin size={12}/>
               </span>
             )}
-            <br>
+            <br />
             {alias     && <Badge label={alias}     color={aliasColor} onClick={() => onFilter?.('alias',alias)} />}
             {groupName && <Badge label={groupName} color={groupColor} onClick={() => onFilter?.('group',groupName)} />}
-            </br>
             <span onClick={e => { e.stopPropagation(); setShowNotes(n => !n); }}
               title={msg.note_count > 0 ? `${msg.note_count} notes` : 'Add note'}
               style={{ cursor:'pointer', lineHeight:1, padding:'0.1rem', position:'relative',
