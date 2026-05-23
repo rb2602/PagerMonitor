@@ -132,6 +132,33 @@ router.delete('/messages/:id', adminOnly, (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+router.post('/messages/:id/regeocode', adminOnly, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id || isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    const row = getDb().prepare('SELECT message FROM messages WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ ok: false, reason: 'Message not found' });
+
+    const cc = (_gs('site_settings', {}).geocodeCountry || 'si');
+    const { parseLocation, geocodeAddress } = require('../utils/parseLocation');
+    const loc = parseLocation(row.message, cc);
+    if (!loc) return res.json({ ok: false, reason: 'No location candidates found' });
+    if (loc.type === 'coords') {
+      getDb().prepare('UPDATE messages SET lat=?, lng=? WHERE id=?').run(loc.lat, loc.lng, id);
+      require('../services/websocket').broadcast({ type: 'message_location', id, lat: loc.lat, lng: loc.lng });
+      addAuditLog(req.session?.username||'admin', 'message.regeocode', `id=${id} type=coords`);
+      return res.json({ ok: true, lat: loc.lat, lng: loc.lng, query: loc.raw });
+    }
+    if (!loc.candidates?.length) return res.json({ ok: false, reason: 'No address candidates found' });
+    const result = await geocodeAddress(loc, cc);
+    if (!result) return res.json({ ok: false, reason: 'Nominatim returned no results' });
+    getDb().prepare('UPDATE messages SET lat=?, lng=? WHERE id=?').run(result.lat, result.lng, id);
+    require('../services/websocket').broadcast({ type: 'message_location', id, lat: result.lat, lng: result.lng });
+    addAuditLog(req.session?.username||'admin', 'message.regeocode', `id=${id} q="${result.query}"`);
+    res.json({ ok: true, lat: result.lat, lng: result.lng, query: result.query });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/db/export', adminOnly, (_req, res) => {
   try {
     const rows    = getDb().prepare('SELECT * FROM messages ORDER BY id ASC').all();

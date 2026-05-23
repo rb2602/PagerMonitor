@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { StickyNote, ChevronDown, ChevronRight, MapPin, Trash2 } from 'lucide-react';
+import { StickyNote, ChevronDown, ChevronRight, MapPin, Trash2, RefreshCw } from 'lucide-react';
 import MessageNotes from './MessageNotes.jsx';
 import { useSite } from '../context/SiteContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -59,6 +59,9 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
   const [expanded, setExpanded] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reGeocoding, setReGeocoding] = useState(false);
+  const [geoResult, setGeoResult] = useState(null);
+  const [geoError, setGeoError] = useState(null);
   const { showMapButton = true } = useSite();
   const { user, token } = useAuth();
   // Only show map button if message has confirmed stored coordinates in DB
@@ -234,6 +237,12 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
               <Field label="Date/Time" v={`${fmtDate(msg.timestamp)} ${fmtTime(msg.timestamp)}`} mono />
               {alias     && <Field label="Alias" v={alias} />}
               {groupName && <Field label="Group" v={groupName} />}
+              {(geoResult || (msg.lat && msg.lng)) && (
+                <Field label="Location" mono
+                  v={geoResult
+                    ? `${geoResult.lat.toFixed(5)}, ${geoResult.lng.toFixed(5)}`
+                    : `${msg.lat.toFixed(5)}, ${msg.lng.toFixed(5)}`} />
+              )}
             </div>
             {msg.message && (
               <div style={{ fontFamily:'monospace', fontSize:'0.82rem', color:'var(--text-1)',
@@ -248,34 +257,77 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
                 title={msg.raw}>RAW: {msg.raw}</div>
             )}
             {user?.role === 'admin' && msg.id && (
-              <div style={{ marginTop:'0.6rem', display:'flex', justifyContent:'flex-end' }}
+              <div style={{ marginTop:'0.6rem', display:'flex', flexDirection:'column', gap:'0.35rem', alignItems:'flex-end' }}
                 onClick={e => e.stopPropagation()}>
-                <button
-                  disabled={deleting}
-                  onClick={async () => {
-                    if (!confirm('Delete this message permanently?')) return;
-                    setDeleting(true);
-                    try {
-                      await fetch(`${BASE}/admin/messages/${msg.id}`, {
-                        method: 'DELETE',
-                        headers: { Authorization: `Bearer ${token}` },
-                      });
-                      onDelete?.(msg.id);
-                    } catch (_) {
-                      setDeleting(false);
-                    }
-                  }}
-                  title="Delete message"
-                  style={{ display:'flex', alignItems:'center', gap:'0.3rem',
-                    fontSize:'0.7rem', fontFamily:'monospace', fontWeight:600,
-                    padding:'0.25rem 0.6rem', borderRadius:'0.35rem', cursor: deleting ? 'wait' : 'pointer',
-                    background:'color-mix(in srgb,var(--accent-red,#ef4444) 10%,transparent)',
-                    border:'1px solid color-mix(in srgb,var(--accent-red,#ef4444) 30%,transparent)',
-                    color:'var(--accent-red,#ef4444)', transition:'background 0.1s' }}
-                  onMouseEnter={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-red,#ef4444) 20%,transparent)'}
-                  onMouseLeave={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-red,#ef4444) 10%,transparent)'}>
-                  <Trash2 size={11}/>{deleting ? 'Deleting…' : 'Delete'}
-                </button>
+                <div style={{ display:'flex', gap:'0.4rem' }}>
+                  <button
+                    disabled={reGeocoding}
+                    onClick={async () => {
+                      setReGeocoding(true); setGeoResult(null); setGeoError(null);
+                      try {
+                        const r = await fetch(`${BASE}/admin/messages/${msg.id}/regeocode`, {
+                          method: 'POST',
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        const data = await r.json();
+                        if (data.ok) setGeoResult(data);
+                        else setGeoError(data.reason || 'Geocoding failed');
+                      } catch (e) {
+                        setGeoError(e.message);
+                      } finally {
+                        setReGeocoding(false);
+                      }
+                    }}
+                    title="Re-run geocoding for this message"
+                    style={{ display:'flex', alignItems:'center', gap:'0.3rem',
+                      fontSize:'0.7rem', fontFamily:'monospace', fontWeight:600,
+                      padding:'0.25rem 0.6rem', borderRadius:'0.35rem', cursor: reGeocoding ? 'wait' : 'pointer',
+                      background:'color-mix(in srgb,var(--accent-blue,#3b82f6) 10%,transparent)',
+                      border:'1px solid color-mix(in srgb,var(--accent-blue,#3b82f6) 30%,transparent)',
+                      color:'var(--accent-blue,#3b82f6)', transition:'background 0.1s' }}
+                    onMouseEnter={e => !reGeocoding && (e.currentTarget.style.background='color-mix(in srgb,var(--accent-blue,#3b82f6) 20%,transparent)')}
+                    onMouseLeave={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-blue,#3b82f6) 10%,transparent)'}>
+                    <RefreshCw size={11} style={{ animation: reGeocoding ? 'spin 1s linear infinite' : 'none' }}/>
+                    {reGeocoding ? 'Geocoding…' : 'Re-geocode'}
+                  </button>
+                  <button
+                    disabled={deleting}
+                    onClick={async () => {
+                      if (!confirm('Delete this message permanently?')) return;
+                      setDeleting(true);
+                      try {
+                        await fetch(`${BASE}/admin/messages/${msg.id}`, {
+                          method: 'DELETE',
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        onDelete?.(msg.id);
+                      } catch (_) {
+                        setDeleting(false);
+                      }
+                    }}
+                    title="Delete message"
+                    style={{ display:'flex', alignItems:'center', gap:'0.3rem',
+                      fontSize:'0.7rem', fontFamily:'monospace', fontWeight:600,
+                      padding:'0.25rem 0.6rem', borderRadius:'0.35rem', cursor: deleting ? 'wait' : 'pointer',
+                      background:'color-mix(in srgb,var(--accent-red,#ef4444) 10%,transparent)',
+                      border:'1px solid color-mix(in srgb,var(--accent-red,#ef4444) 30%,transparent)',
+                      color:'var(--accent-red,#ef4444)', transition:'background 0.1s' }}
+                    onMouseEnter={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-red,#ef4444) 20%,transparent)'}
+                    onMouseLeave={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-red,#ef4444) 10%,transparent)'}>
+                    <Trash2 size={11}/>{deleting ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
+                {geoResult && (
+                  <div style={{ fontSize:'0.68rem', fontFamily:'monospace', color:'var(--accent-green,#4ade80)' }}>
+                    {geoResult.lat.toFixed(5)}, {geoResult.lng.toFixed(5)}
+                    {geoResult.query && <span style={{ color:'var(--text-3)', marginLeft:'0.5rem' }}>— {geoResult.query}</span>}
+                  </div>
+                )}
+                {geoError && (
+                  <div style={{ fontSize:'0.68rem', fontFamily:'monospace', color:'var(--accent-red,#ef4444)' }}>
+                    {geoError}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -300,6 +352,7 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
           0%,100% { background: color-mix(in srgb, var(--accent-amber) 12%, var(--bg-0)); }
           50%      { background: color-mix(in srgb, var(--accent-amber) 35%, var(--bg-0)); }
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </>
   );
