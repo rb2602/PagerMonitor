@@ -181,7 +181,13 @@ function siCandidates(text, country, countryCode) {
     // Use corrected index name for diacritics/typo fixing; keep original if no strong match.
     // 0.90 threshold for both cases — diacritics fixes normalize to sim=1.0 anyway,
     // and lower values swap different streets (e.g. "Ob potoku" → "K potoku").
-    const streetUsed = (streetSim >= 0.90 && matches[0]?.name)
+    // Guard: only accept correction when the suffix TYPE matches — prevents
+    // "Ulica dolenjskega odreda" from being replaced by "Cesta dolenjskega odreda"
+    // (same key word "dolenjskega", different street type, both sim=1.0).
+    const inSuffix  = streetPhrase.toLowerCase().split(/\s+/).find(w => SUFFIX_RE.test(w)) || '';
+    const idxSuffix = (matches[0]?.name || '').toLowerCase().split(/\s+/).find(w => SUFFIX_RE.test(w)) || '';
+    const suffixOk  = !inSuffix || normSI(inSuffix) === normSI(idxSuffix);
+    const streetUsed = (streetSim >= 0.90 && matches[0]?.name && suffixOk)
       ? matches[0].name
       : streetPhrase;
 
