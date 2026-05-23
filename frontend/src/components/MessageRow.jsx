@@ -200,7 +200,8 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
                 border:'1px solid color-mix(in srgb,var(--accent-amber) 22%,transparent)' }}>
               {msg.capcode}
             </span>
-
+            {alias     && <Badge label={alias}     color={aliasColor} onClick={() => onFilter?.('alias',alias)} />}
+            {groupName && <Badge label={groupName} color={groupColor} onClick={() => onFilter?.('group',groupName)} />}
             <span style={{ flex:1 }} />
             {showMapButton && hasLocation && (
               <span onClick={e => { e.stopPropagation(); onMapClick?.(msg); }}
@@ -208,7 +209,6 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
                 <MapPin size={12}/>
               </span>
             )}
-
             <span onClick={e => { e.stopPropagation(); setShowNotes(n => !n); }}
               title={msg.note_count > 0 ? `${msg.note_count} notes` : 'Add note'}
               style={{ cursor:'pointer', lineHeight:1, padding:'0.1rem', position:'relative',
@@ -230,9 +230,6 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
             <span style={{ color:'var(--text-3)', lineHeight:1 }}>
               {expanded ? <ChevronDown size={10}/> : <ChevronRight size={10}/>}
             </span>
-            <br />
-            {alias     && <Badge label={alias}     color={aliasColor} onClick={() => onFilter?.('alias',alias)} />}
-            {groupName && <Badge label={groupName} color={groupColor} onClick={() => onFilter?.('group',groupName)} />}
           </div>
           {/* Message — full wrapping on mobile */}
           <div style={{ fontFamily:'monospace', fontSize:'0.82rem', color: msg.message ? 'var(--text-1)' : 'var(--text-3)',
