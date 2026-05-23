@@ -14,6 +14,9 @@ function initDb() {
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
+  db.function('regexp', { deterministic: true }, (pattern, str) => {
+    try { return new RegExp(pattern, 'i').test(str ?? '') ? 1 : 0; } catch { return 0; }
+  });
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -276,7 +279,9 @@ function getHistory(limit = 200) {
 }
 
 function searchMessages(query, limit = 100) {
-  const safe = query.replace(/['"*]/g, '');
+  const safe  = query.replace(/['"*]/g, '').trim();
+  const terms = safe.split(/\s+/).filter(Boolean);
+  const ftsQuery = terms.map(t => `${t}*`).join(' ');
   return getDb().prepare(`
     SELECT m.*, a.name as alias_name, a.color as alias_color, a.row_color as alias_row_color, a.row_sound as alias_row_sound,
            g.id as group_id, g.name as group_name, g.color as group_color, g.row_color as group_row_color, g.row_sound as group_row_sound,
@@ -289,7 +294,7 @@ function searchMessages(query, limit = 100) {
     LEFT JOIN groups  pg ON pg.id = g.parent_id
     WHERE messages_fts MATCH ?
     ORDER BY m.id DESC LIMIT ?
-  `).all(`"${safe}"`, limit);
+  `).all(ftsQuery, limit);
 }
 
 function getMessageStats() {

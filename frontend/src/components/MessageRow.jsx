@@ -114,7 +114,7 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
           </span>
           {/* Date + Time — two lines */}
           <div style={{ fontFamily:'monospace', flexShrink:0, minWidth:'62px', textAlign:'right', lineHeight:1.3 }}>
-            <div style={{ fontSize:'0.65rem', color:'var(--text-3)', opacity:0.7 }}>{fmtDate(msg.timestamp)}</div>
+            <div style={{ fontSize:'0.65rem', color:'var(--text-2)' }}>{fmtDate(msg.timestamp)}</div>
             <div style={{ fontSize:'0.72rem', color:'var(--text-2)' }}>{fmtTime(msg.timestamp)}</div>
           </div>
           {/* Capcode */}
@@ -141,8 +141,8 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
             maskImage:'linear-gradient(to right, black 82%, transparent 100%)' }}>
             {msg.message
               ? <HighlightedMsg text={msg.message} rules={highlightRules}
-                  style={{ fontFamily:'monospace', fontSize:'0.82rem', display:'block',
-                    whiteSpace:'nowrap', color:'var(--text-1)' }} />
+                  style={{ fontFamily:'monospace', fontSize:'0.875rem', display:'block',
+                    whiteSpace:'nowrap', color:'var(--text-2)' }} />
               : <span style={{ fontFamily:'monospace', fontSize:'0.82rem', color:'var(--text-3)', fontStyle:'italic' }}>
                   [tone / numeric only]
                 </span>
@@ -186,10 +186,10 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
 
         {/* ── MOBILE card (hidden on desktop) ──────────────────── */}
         <div className="msg-mobile" style={{ display:'none', padding:'0.5rem 0.75rem', gap:'0.2rem', flexDirection:'column' }}>
-          {/* Top line: time + capcode + badges + NEW */}
-          <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', flexWrap:'wrap' }}>
+          {/* Top line: time + capcode + icons */}
+          <div style={{ display:'flex', alignItems:'center', gap:'0.4rem' }}>
             <span style={{ fontFamily:'monospace', flexShrink:0, lineHeight:1.3 }}>
-              <span style={{ fontSize:'0.62rem', color:'var(--text-3)', opacity:0.7 }}>{fmtDate(msg.timestamp)} </span>
+              <span style={{ fontSize:'0.62rem', color:'var(--text-2)' }}>{fmtDate(msg.timestamp)} </span>
               <span style={{ fontSize:'0.7rem', color:'var(--text-2)' }}>{fmtTime(msg.timestamp)}</span>
             </span>
             <span onClick={e => { e.stopPropagation(); onFilter?.('capcode', msg.capcode); }}
@@ -200,8 +200,6 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
                 border:'1px solid color-mix(in srgb,var(--accent-amber) 22%,transparent)' }}>
               {msg.capcode}
             </span>
-            {alias     && <Badge label={alias}     color={aliasColor} onClick={() => onFilter?.('alias',alias)} />}
-            {groupName && <Badge label={groupName} color={groupColor} onClick={() => onFilter?.('group',groupName)} />}
             <span style={{ flex:1 }} />
             {showMapButton && hasLocation && (
               <span onClick={e => { e.stopPropagation(); onMapClick?.(msg); }}
@@ -231,8 +229,15 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
               {expanded ? <ChevronDown size={10}/> : <ChevronRight size={10}/>}
             </span>
           </div>
+          {/* Badges — second line on mobile */}
+          {(alias || groupName) && (
+            <div style={{ display:'flex', gap:'0.3rem', flexWrap:'wrap' }}>
+              {alias     && <Badge label={alias}     color={aliasColor} onClick={() => onFilter?.('alias',alias)} />}
+              {groupName && <Badge label={groupName} color={groupColor} onClick={() => onFilter?.('group',groupName)} />}
+            </div>
+          )}
           {/* Message — full wrapping on mobile */}
-          <div style={{ fontFamily:'monospace', fontSize:'0.82rem', color: msg.message ? 'var(--text-1)' : 'var(--text-3)',
+          <div style={{ fontFamily:'monospace', fontSize:'0.82rem', color: msg.message ? 'var(--text-2)' : 'var(--text-3)',
             fontStyle: msg.message ? 'normal' : 'italic', lineHeight:1.4,
             wordBreak:'break-word', whiteSpace:'normal' }}>
             {msg.message
