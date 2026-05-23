@@ -28,6 +28,7 @@ const HOUSE_RE  = /^\d{1,4}[a-zA-Z]?$/;
 const PUNCT_RE  = /^[-–—,;:.()\[\]/\\]+$/;
 
 const SI_CITIES = [
+  // Major cities
   'Ljubljana', 'Maribor', 'Celje', 'Kranj', 'Koper', 'Novo Mesto', 'Nova Gorica',
   'Velenje', 'Krško', 'Slovenj Gradec', 'Murska Sobota', 'Ptuj', 'Domžale',
   'Škofja Loka', 'Trbovlje', 'Kamnik', 'Izola', 'Piran', 'Postojna',
@@ -35,6 +36,32 @@ const SI_CITIES = [
   'Jesenice', 'Radovljica', 'Gornja Radgona', 'Ormož', 'Zagorje ob Savi',
   'Idrija', 'Tolmin', 'Tržič', 'Žalec', 'Laško', 'Šentjur', 'Rogaška Slatina',
   'Šempeter pri Gorici', 'Ruše', 'Ravne na Koroškem', 'Hrastnik',
+  // Municipality centers — mirrors frontend list; fallback when si_places.json not loaded
+  'Škofljica', 'Medvode', 'Mengeš', 'Komenda', 'Vodice', 'Trzin', 'Ig',
+  'Brezovica', 'Borovnica', 'Horjul', 'Dobrova', 'Log pri Brezovici',
+  'Lukovica', 'Moravče', 'Šmartno pri Litiji', 'Ivančna Gorica',
+  'Trebnje', 'Mirna', 'Šentrupert', 'Mokronog', 'Šmarješke Toplice',
+  'Šentjernej', 'Kostanjevica na Krki', 'Straža', 'Dolenjske Toplice',
+  'Črnomelj', 'Metlika', 'Semič', 'Kočevje', 'Ribnica', 'Sodražica',
+  'Loški Potok', 'Osilnica', 'Ilirska Bistrica', 'Pivka', 'Cerknica',
+  'Bloke', 'Loška Dolina',
+  'Šempeter-Vrtojba', 'Miren-Kostanjevica', 'Renče-Vogrsko',
+  'Kanal', 'Kanal ob Soči', 'Bovec', 'Kobarid', 'Zreče', 'Vitanje',
+  'Šoštanj', 'Mozirje', 'Nazarje', 'Gornji Grad', 'Rečica ob Savinji',
+  'Ljubno', 'Luče', 'Solčava', 'Braslovče', 'Polzela', 'Štore',
+  'Šentilj', 'Lenart', 'Kungota', 'Pesnica', 'Hoče-Slivnica',
+  'Miklavž na Dravskem Polju', 'Duplek', 'Starše', 'Hajdina',
+  'Markovci', 'Kidričevo', 'Majšperk', 'Videm', 'Podlehnik',
+  'Žetale', 'Cirkulane', 'Zavrč', 'Središče ob Dravi',
+  'Sveti Tomaž', 'Benedikt', 'Sveta Ana', 'Cerkvenjak',
+  'Sveti Andraž v Slovenskih Goricah', 'Sveta Trojica v Slovenskih Goricah',
+  'Destrnik', 'Trnovska vas', 'Dornava', 'Juršinci', 'Sveti Jurij ob Ščavnici',
+  'Razkrižje', 'Veržej', 'Beltinci', 'Lendava', 'Dobrovnik', 'Moravske Toplice',
+  'Kuzma', 'Rogašovci', 'Cankova', 'Grad', 'Hodoš', 'Šalovci',
+  'Križevci', 'Ljutomer', 'Sveti Jurij v Slovenskih Goricah',
+  'Apače', 'Radenci', 'Slovenska Konjice',
+  'Mislinja', 'Podvelka', 'Radlje ob Dravi', 'Ribnica na Pohorju',
+  'Vuzenica', 'Muta', 'Lovrenc na Pohorju', 'Rače-Fram', 'Selnica ob Dravi',
 ];
 
 const _cityPattern = SI_CITIES
@@ -181,10 +208,59 @@ function siCandidates(text, country, countryCode) {
     if (!seen.has(query)) { seen.add(query); ranked.push({ query, sc: sc + rawBonus }); }
   }
 
+  // Pre-compute city hint words for suffix-first boundary detection.
+  // e.g. cityHint="Ivančna Gorica" → cityHintNorm=["ivancna","gorica"]
+  const cityHintNorm = cityHint ? normSI(cityHint).split(/\s+/) : [];
+
+  // Returns true when the sequence ending at words[wordIdx] matches the full
+  // city hint — so a city tail word like "GORICA" (from "IVANČNA GORICA") is
+  // not mistaken for a street-name prefix.
+  function endsWithCityHint(wordIdx) {
+    if (cityHintNorm.length === 0) return false;
+    for (let k = 0; k < cityHintNorm.length; k++) {
+      const wi = wordIdx - (cityHintNorm.length - 1 - k);
+      if (wi < 0 || normSI(words[wi]) !== cityHintNorm[k]) return false;
+    }
+    return true;
+  }
+
   // Strategy 1: keyword windows (cesta/ulica/trg/...)
   for (let i = 0; i < words.length; i++) {
     if (!SUFFIX_RE.test(words[i])) continue;
 
+    // Find the first non-punct word before this suffix (for boundary checks)
+    let prevNPIdx = -1;
+    for (let j = i - 1; j >= 0; j--) {
+      if (!PUNCT_RE.test(words[j])) { prevNPIdx = j; break; }
+    }
+
+    // ── Suffix-FIRST pattern: "[CITY], ULICA DOLENJSKEGA ODREDA 14" ──────────
+    // Detected when the nearest non-punct word before the suffix is the tail of
+    // the city hint (comma was stripped by `clean`), OR a standalone punctuation
+    // word (dash, em-dash) sits between the previous content word and the suffix.
+    const suffixIsFirst =
+      (prevNPIdx >= 0 && endsWithCityHint(prevNPIdx)) ||
+      (prevNPIdx >= 0 && words.slice(prevNPIdx + 1, i).some(w => PUNCT_RE.test(w)));
+
+    if (suffixIsFirst) {
+      // Street name = suffix + all following content words up to house number or punct.
+      // Do NOT break on prepositions — "Ulica ob potoku" has "ob" mid-name.
+      const nameParts = [words[i]];
+      let houseNum = null;
+      for (let j = i + 1; j < words.length; j++) {
+        if (HOUSE_RE.test(words[j])) { houseNum = words[j]; break; }
+        if (PUNCT_RE.test(words[j])) break;
+        nameParts.push(words[j]);
+      }
+      // Need at least one word after the suffix to form a real street name
+      if (nameParts.length >= 2) {
+        // cityHint already provides the settlement — no extra hints needed
+        addCandidate(nameParts.join(' '), houseNum, true, []);
+      }
+      continue; // skip suffix-last logic for this suffix occurrence
+    }
+
+    // ── Suffix-LAST pattern: "DOLENJSKA CESTA 14" ────────────────────────────
     // Find the word immediately before the suffix (street adjective); track its index
     let beforeWord = null, beforeIdx = -1;
     for (let j = i - 1; j >= 0; j--) {

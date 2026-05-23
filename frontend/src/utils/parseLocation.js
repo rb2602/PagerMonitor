@@ -132,10 +132,57 @@ function siCandidatesFE(text, country) {
     if (!seen.has(query)) { seen.add(query); ranked.push({ query, sc: sc + rawBonus }); }
   }
 
+  // Pre-compute city hint words for suffix-first boundary detection.
+  const cityHintNorm = cityHint ? normSI(cityHint).split(/\s+/) : [];
+
+  // Returns true when the sequence ending at words[wordIdx] matches the full
+  // city hint — prevents city tail words (e.g. "GORICA" from "IVANČNA GORICA")
+  // from being used as a street-name prefix.
+  function endsWithCityHint(wordIdx) {
+    if (cityHintNorm.length === 0) return false;
+    for (let k = 0; k < cityHintNorm.length; k++) {
+      const wi = wordIdx - (cityHintNorm.length - 1 - k);
+      if (wi < 0 || normSI(words[wi]) !== cityHintNorm[k]) return false;
+    }
+    return true;
+  }
+
   // Strategy 1: keyword windows
   for (let i = 0; i < words.length; i++) {
     if (!SUFFIX_RE.test(words[i])) continue;
 
+    // Find first non-punct word before this suffix (for boundary checks)
+    let prevNPIdx = -1;
+    for (let j = i - 1; j >= 0; j--) {
+      if (!PUNCT_RE.test(words[j])) { prevNPIdx = j; break; }
+    }
+
+    // ── Suffix-FIRST pattern: "[CITY], ULICA DOLENJSKEGA ODREDA 14" ──────────
+    // Detected when the nearest non-punct word before the suffix is the tail of
+    // the city hint (comma stripped by `clean`), OR a standalone punctuation
+    // word (dash) sits between the previous content word and the suffix.
+    const suffixIsFirst =
+      (prevNPIdx >= 0 && endsWithCityHint(prevNPIdx)) ||
+      (prevNPIdx >= 0 && words.slice(prevNPIdx + 1, i).some(w => PUNCT_RE.test(w)));
+
+    if (suffixIsFirst) {
+      // Street name = suffix + following content words until house number or punct.
+      // Do NOT break on prepositions — "Ulica ob potoku" has "ob" mid-name.
+      const nameParts = [words[i]];
+      let houseNum = null;
+      for (let j = i + 1; j < words.length; j++) {
+        if (HOUSE_RE.test(words[j])) { houseNum = words[j]; break; }
+        if (PUNCT_RE.test(words[j])) break;
+        nameParts.push(words[j]);
+      }
+      if (nameParts.length >= 2) {
+        // cityHint already provides the settlement — no extra hints needed
+        add(nameParts.join(' '), houseNum, true, []);
+      }
+      continue; // skip suffix-last logic for this suffix occurrence
+    }
+
+    // ── Suffix-LAST pattern: "DOLENJSKA CESTA 14" ────────────────────────────
     // Word immediately before the suffix; track its index for hint extraction
     let beforeWord = null, beforeIdx = -1;
     for (let j = i - 1; j >= 0; j--) {
