@@ -50,7 +50,7 @@ export default function UpdatePanel() {
     const poll = setInterval(async () => {
       tries++;
       try {
-        const r = await fetch(`${BASE}/api/status`);
+        const r = await fetch(`${BASE}/health`);
         if (r.ok) { clearInterval(poll); window.location.reload(); }
       } catch (_) {}
       if (tries > 60) clearInterval(poll); // give up after 2 min
