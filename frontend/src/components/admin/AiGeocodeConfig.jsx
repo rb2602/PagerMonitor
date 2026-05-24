@@ -270,6 +270,18 @@ export default function AiGeocodeConfig() {
             instead of entering it here — it takes priority.
           </InfoCard>
 
+          <div style={{
+            marginTop: '0.6rem',
+            padding: '0.5rem 0.75rem', borderRadius: '0.4rem',
+            background: 'color-mix(in srgb,var(--accent-amber) 8%,transparent)',
+            border: '1px solid color-mix(in srgb,var(--accent-amber) 30%,transparent)',
+            fontSize: '0.75rem', color: 'var(--text-2)', lineHeight: 1.6,
+          }}>
+            ⚠ <strong>Privacy:</strong> The decoded text of every pager message is sent to <strong>Groq's cloud servers</strong> (USA) for processing.
+            Do not enable if your messages contain sensitive personal data that must stay on-premises.
+            For a fully local and private alternative, use <strong>Ollama</strong> instead.
+          </div>
+
           <div style={{ height: '0.75rem' }} />
 
           <label className="pm-label">
@@ -324,6 +336,18 @@ export default function AiGeocodeConfig() {
             create a key and add a small credit ($5 minimum).<br />
             <strong>Tip:</strong> You can also set <code>OPENAI_API_KEY=…</code> in your <code>.env</code> file.
           </InfoCard>
+
+          <div style={{
+            marginTop: '0.6rem',
+            padding: '0.5rem 0.75rem', borderRadius: '0.4rem',
+            background: 'color-mix(in srgb,var(--accent-amber) 8%,transparent)',
+            border: '1px solid color-mix(in srgb,var(--accent-amber) 30%,transparent)',
+            fontSize: '0.75rem', color: 'var(--text-2)', lineHeight: 1.6,
+          }}>
+            ⚠ <strong>Privacy:</strong> The decoded text of every pager message is sent to <strong>OpenAI's cloud servers</strong> (USA) for processing.
+            Do not enable if your messages contain sensitive personal data that must stay on-premises.
+            For a fully local and private alternative, use <strong>Ollama</strong> instead.
+          </div>
 
           <div style={{ height: '0.75rem' }} />
 
