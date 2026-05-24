@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { Cpu, Database, Bell, Tag, Terminal, Server, Users, Highlighter,
          Copy, Layers, Settings2, ChevronDown, Wifi,
-         BarChart2, Link, Radio, ClipboardList, Archive, Activity, HardDrive, Mail } from 'lucide-react';
+         BarChart2, Link, Radio, ClipboardList, Archive, Activity, HardDrive, Mail, Brain } from 'lucide-react';
 import ErrorBoundary  from '../ErrorBoundary.jsx';
 import SdrControl     from './SdrControl.jsx';
 import SystemStats    from './SystemStats.jsx';
@@ -24,9 +24,10 @@ import StatsDashboard from './StatsDashboard.jsx';
 import AuditLog       from './AuditLog.jsx';
 import ActivityFeed   from './ActivityFeed.jsx';
 import BackupRestore  from './BackupRestore.jsx';
-import EmailConfig    from './EmailConfig.jsx';
-import UserNotifPrefs from './UserNotifPrefs.jsx';
-import ArchiveConfig  from './ArchiveConfig.jsx';
+import EmailConfig      from './EmailConfig.jsx';
+import UserNotifPrefs  from './UserNotifPrefs.jsx';
+import ArchiveConfig   from './ArchiveConfig.jsx';
+import AiGeocodeConfig from './AiGeocodeConfig.jsx';
 
 const TABS = [
   { group: 'SDR' },
@@ -38,6 +39,7 @@ const TABS = [
 
   { group: 'Messages' },
   { id:'db',          label:'Database',       icon:<Database size={14}/> },
+  { id:'aigeocode',   label:'AI Geocode',     icon:<Brain size={14}/> },
   { id:'archive',     label:'Archive',        icon:<Archive size={14}/> },
   { id:'stats',       label:'Statistics',     icon:<BarChart2 size={14}/> },
   { id:'dedup',       label:'Dedup',          icon:<Copy size={14}/> },
@@ -70,6 +72,7 @@ function TabContent({ tab, sdrStatus, serverStatus, onRulesChange, onGroupsChang
     case 'sdr':         return <SdrControl sdrStatus={sdrStatus} />;
     case 'system':      return <SystemStats serverStatus={serverStatus} />;
     case 'db':          return <DbTools />;
+    case 'aigeocode':   return <AiGeocodeConfig />;
     case 'stats':       return <StatsDashboard />;
     case 'notif':       return <NotifConfig />;
     case 'keyword':     return <KeywordAlerts />;

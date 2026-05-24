@@ -150,7 +150,7 @@ router.post('/messages/:id/regeocode', adminOnly, async (req, res) => {
       return res.json({ ok: true, lat: loc.lat, lng: loc.lng, query: loc.raw });
     }
     if (!loc.candidates?.length) return res.json({ ok: false, reason: 'No address candidates found' });
-    const result = await geocodeAddress(loc.candidates, cc);
+    const result = await geocodeAddress(loc.candidates, cc, row.message);
     if (!result) return res.json({ ok: false, reason: 'Nominatim returned no results', query: loc.candidates[0] });
     getDb().prepare('UPDATE messages SET lat=?, lng=? WHERE id=?').run(result.lat, result.lng, id);
     require('../services/websocket').broadcast({ type: 'message_location', id, lat: result.lat, lng: result.lng });
@@ -548,6 +548,48 @@ router.post('/archive/run', adminOnly, (req, res) => {
     const days  = parseInt(req.body.days, 10) || cfg.afterDays || 30;
     const count = archiveOldMessages(days);
     res.json({ ok: true, archived: count, days });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── AI Geocode ────────────────────────────────────────────────────────────────
+const aiGeocode = require('../utils/aiGeocode');
+
+router.get('/ai-geocode/config', adminOnly, (_req, res) => {
+  try {
+    const cfg = aiGeocode.getConfig();
+    res.json({
+      provider:        cfg.provider,
+      groqKey:         cfg.groqKey   ? aiGeocode.MASKED : '',
+      groqKeySource:   process.env.GROQ_API_KEY   ? 'env' : (cfg.groqKey   ? 'db' : 'none'),
+      groqModel:       cfg.groqModel,
+      openaiKey:       cfg.openaiKey ? aiGeocode.MASKED : '',
+      openaiKeySource: process.env.OPENAI_API_KEY ? 'env' : (cfg.openaiKey ? 'db' : 'none'),
+      openaiModel:     cfg.openaiModel,
+      ollamaUrl:       cfg.ollamaUrl,
+      ollamaModel:     cfg.ollamaModel,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/ai-geocode/config', adminOnly, (req, res) => {
+  try {
+    aiGeocode.saveConfig(req.body);
+    addAuditLog(req.session?.username || 'admin', 'ai_geocode.config', `provider=${req.body.provider}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/ai-geocode/status', adminOnly, async (_req, res) => {
+  try { res.json(await aiGeocode.checkStatus()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/ai-geocode/test', adminOnly, async (req, res) => {
+  try {
+    const text = (req.body.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'text is required' });
+    const extracted = await aiGeocode.extractAddress(text);
+    res.json({ ok: !!extracted?.street, extracted: extracted || null });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

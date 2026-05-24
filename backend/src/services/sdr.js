@@ -460,7 +460,7 @@ function handleLine(line) {
   ;(async () => {
     let notifyPayload = payload;
     if (!lat && location.candidates?.length) {
-      const result = await geocodeAddress(location.candidates, geocodeCountry).catch(() => null);
+      const result = await geocodeAddress(location.candidates, geocodeCountry, parsed.message).catch(() => null);
       if (result) {
         try { require('./database').getDb().prepare('UPDATE messages SET lat=?, lng=? WHERE id=?').run(result.lat, result.lng, id); } catch (_) {}
         broadcast({ type: 'message_location', id, lat: result.lat, lng: result.lng });

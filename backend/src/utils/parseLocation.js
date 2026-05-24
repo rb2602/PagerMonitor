@@ -450,7 +450,7 @@ function _enqueue(work) {
   return slot;
 }
 
-async function geocodeAddress(candidates, countryCode = 'si') {
+async function geocodeAddress(candidates, countryCode = 'si', originalText = null) {
   const queries = Array.isArray(candidates) ? candidates : [candidates].filter(Boolean);
   // Candidates are pre-ranked by confidence; one well-formed query is enough
   const toTry = queries.slice(0, 1).filter(q => q?.trim());
@@ -484,6 +484,25 @@ async function geocodeAddress(candidates, countryCode = 'si') {
       return result;
     }
   }
+
+  // ── AI fallback ─────────────────────────────────────────────────────────────
+  // When Nominatim found nothing and we have the original message text, ask the
+  // configured AI provider to extract the address, then retry Nominatim once
+  // with the AI-formed query (no originalText passed → no infinite recursion).
+  if (originalText) {
+    try {
+      const { extractAddress } = require('./aiGeocode');
+      const extracted = await extractAddress(originalText);
+      if (extracted?.street) {
+        const parts = [extracted.street, extracted.houseNumber].filter(Boolean).join(' ');
+        const loc   = extracted.settlement ? `${parts}, ${extracted.settlement}` : parts;
+        const query = `${loc}, ${COUNTRY_NAMES[countryCode] || countryCode}`;
+        const aiResult = await geocodeAddress([query], countryCode); // no originalText → no loop
+        if (aiResult) return { ...aiResult, aiAssisted: true };
+      }
+    } catch (_) { /* AI unavailable — degrade silently */ }
+  }
+
   return null;
 }
 
