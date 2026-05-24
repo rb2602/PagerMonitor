@@ -22,8 +22,11 @@ function saveConfig(incoming) {
   const cfg = { ...existing, ...incoming };
   // Keys are never round-tripped to the frontend, so the only way they arrive
   // non-empty is when the user explicitly typed a new one. Empty → keep existing.
-  if (!incoming.groqKey)   cfg.groqKey   = existing.groqKey   || '';
-  if (!incoming.openaiKey) cfg.openaiKey = existing.openaiKey || '';
+  // Trim whitespace — copy-pasted keys often have a trailing space or newline.
+  if (incoming.groqKey?.trim())   cfg.groqKey   = incoming.groqKey.trim();
+  else                             cfg.groqKey   = existing.groqKey   || '';
+  if (incoming.openaiKey?.trim()) cfg.openaiKey = incoming.openaiKey.trim();
+  else                             cfg.openaiKey = existing.openaiKey || '';
   setSetting('ai_geocode', cfg);
 }
 
@@ -132,24 +135,47 @@ async function checkStatus() {
 
   if (cfg.provider === 'groq') {
     if (!cfg.groqKey) { status.connected = false; status.error = 'No API key configured'; return status; }
+    // Use the same chat-completions endpoint as real extraction — the /models list
+    // endpoint returns 401 on some free-tier Groq accounts even with a valid key.
     try {
-      const res = await fetch('https://api.groq.com/openai/v1/models', {
-        headers: { 'Authorization': `Bearer ${cfg.groqKey}` },
-        signal: AbortSignal.timeout(5000),
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.groqKey}` },
+        signal: AbortSignal.timeout(8000),
+        body: JSON.stringify({
+          model: cfg.groqModel,
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1,
+          temperature: 0,
+        }),
       });
       status.connected = res.ok;
-      if (!res.ok) status.error = `HTTP ${res.status} — check your API key`;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        status.error = body?.error?.message || `HTTP ${res.status} — check your API key`;
+      }
     } catch (e) { status.connected = false; status.error = e.message; }
 
   } else if (cfg.provider === 'openai') {
     if (!cfg.openaiKey) { status.connected = false; status.error = 'No API key configured'; return status; }
+    // Use chat completions for the probe — same endpoint as real extraction.
     try {
-      const res = await fetch('https://api.openai.com/v1/models', {
-        headers: { 'Authorization': `Bearer ${cfg.openaiKey}` },
-        signal: AbortSignal.timeout(5000),
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.openaiKey}` },
+        signal: AbortSignal.timeout(10000),
+        body: JSON.stringify({
+          model: cfg.openaiModel,
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1,
+          temperature: 0,
+        }),
       });
       status.connected = res.ok;
-      if (!res.ok) status.error = `HTTP ${res.status} — check your API key`;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        status.error = body?.error?.message || `HTTP ${res.status} — check your API key`;
+      }
     } catch (e) { status.connected = false; status.error = e.message; }
 
   } else if (cfg.provider === 'ollama') {
