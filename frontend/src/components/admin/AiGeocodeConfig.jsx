@@ -284,6 +284,7 @@ export default function AiGeocodeConfig() {
           </label>
           <input className="pm-input"
             type="password"
+            autoComplete="new-password"
             value={cfg.groqKey}
             placeholder={
               cfg.groqKeySource === 'env' ? 'Loaded from GROQ_API_KEY env var' :
@@ -338,6 +339,7 @@ export default function AiGeocodeConfig() {
           </label>
           <input className="pm-input"
             type="password"
+            autoComplete="new-password"
             value={cfg.openaiKey}
             placeholder={
               cfg.openaiKeySource === 'env' ? 'Loaded from OPENAI_API_KEY env var' :
