@@ -31,14 +31,20 @@ function saveConfig(incoming) {
 }
 
 // ── Prompt ────────────────────────────────────────────────────────────────────
-const PROMPT = (text) =>
-  `Extract the address from this Slovenian emergency pager message.
+// Addresses appear in the first part of the message; truncate long payloads to
+// save tokens and avoid sending unnecessary content to cloud providers.
+const MAX_MSG_CHARS = 350;
+
+const PROMPT = (text) => {
+  const snippet = text.length > MAX_MSG_CHARS ? text.slice(0, MAX_MSG_CHARS) + '…' : text;
+  return `Extract the address from this Slovenian emergency pager message.
 Return ONLY valid JSON with these exact keys: {"street":"...","houseNumber":"...","settlement":"..."}
 Use null for any missing field. settlement = city or village name only, never the street.
 Ignore incident description words (požar/fire, nesreča/accident, stiska/distress, dihalna/respiratory, intervencija, gasilci, etc.)
 Preserve Slovenian characters (š, č, ž, etc.) exactly.
 
-Message: ${text}`;
+Message: ${snippet}`;
+};
 
 // ── Groq ──────────────────────────────────────────────────────────────────────
 async function _fromGroq(text, cfg) {
