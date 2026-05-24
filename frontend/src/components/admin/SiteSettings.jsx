@@ -234,13 +234,15 @@ export default function SiteSettings() {
             <span style={{ fontSize:'0.8rem', color:'var(--text-3)' }}>Preview:</span>
             <span style={{ fontSize:'0.65rem', fontWeight:800, color:'var(--accent-green)',
               background:'color-mix(in srgb, var(--accent-green) 15%, transparent)',
-              padding:'0.15rem 0.5rem', borderRadius:'0.3rem', letterSpacing:'0.05em' }}>
+              padding:'0.15rem 0.5rem', borderRadius:'0.3rem', letterSpacing:'0.05em',
+              animation:'new-pulse 2s ease-in-out infinite' }}>
               NEW
             </span>
             <span style={{ fontSize:'0.78rem', color:'var(--text-3)', fontFamily:'monospace' }}>
               visible for {badgeSeconds} second{badgeSeconds !== 1 ? 's' : ''} after message arrives
             </span>
           </div>
+          <style>{`@keyframes new-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }`}</style>
 
           <div style={{ fontSize:'0.72rem', color:'var(--text-3)' }}>
             How long the <span style={{ color:'var(--accent-green)', fontWeight:700 }}>NEW</span> badge

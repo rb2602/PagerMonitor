@@ -76,11 +76,11 @@ export default function MessageFeed({ messages, highlightRules = [], groups = []
         if (!id) return;
         setLastSeenId(id);
         saveLastSeen(id).catch(() => {});
-      }, 2000);
+      }, newBadgeSeconds * 1000);
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [messages, lastSeenId]);
+  }, [messages, lastSeenId, newBadgeSeconds]);
 
   useEffect(() => () => clearTimeout(markSeenTimer.current), []);
 
