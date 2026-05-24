@@ -383,21 +383,39 @@ export default function AiGeocodeConfig() {
       <div className="pm-card" style={{ marginBottom: '1rem' }}>
         <div className="pm-section-title"><Info size={12} style={{ marginRight: '0.3rem' }} />How it works</div>
         <div style={{ fontSize: '0.77rem', color: 'var(--text-3)', lineHeight: 1.75 }}>
+
+          {/* AI enabled path */}
+          <div style={{ marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.72rem',
+            color: 'var(--accent-green)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            When AI is enabled
+          </div>
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.3rem' }}>
             <span style={{ color: 'var(--accent-green)', fontWeight: 700, flexShrink: 0 }}>1.</span>
-            <span>Message arrives → regex pipeline extracts address candidates → Nominatim geocodes</span>
+            <span>Message arrives → <strong>AI reads the raw text</strong> and extracts street + house number + settlement directly</span>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.3rem' }}>
-            <span style={{ color: 'var(--accent-amber)', fontWeight: 700, flexShrink: 0 }}>2.</span>
-            <span>If Nominatim returns <em>no results</em> → AI reads the raw message and extracts street + number + settlement</span>
+            <span style={{ color: 'var(--accent-green)', fontWeight: 700, flexShrink: 0 }}>2.</span>
+            <span>Nominatim geocodes the AI-formed address → coordinates saved</span>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <span style={{ color: 'var(--accent-amber)', fontWeight: 700, flexShrink: 0 }}>3.</span>
+            <span>If AI is unreachable or returns nothing → falls back to regex pipeline → Nominatim</span>
+          </div>
+
+          {/* Disabled path */}
+          <div style={{ marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.72rem',
+            color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            When AI is disabled
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <span style={{ color: 'var(--accent-blue)', fontWeight: 700, flexShrink: 0 }}>3.</span>
-            <span>Nominatim is retried with the AI-formed query → coordinates saved to the message</span>
+            <span style={{ color: 'var(--text-3)', fontWeight: 700, flexShrink: 0 }}>1.</span>
+            <span>Regex pipeline extracts address candidates → Nominatim geocodes — same as before</span>
           </div>
-          <div style={{ marginTop: '0.6rem', padding: '0.4rem 0.6rem',
+
+          <div style={{ marginTop: '0.75rem', padding: '0.4rem 0.6rem',
             background: 'var(--bg-0)', borderRadius: '0.35rem', fontFamily: 'monospace', fontSize: '0.7rem' }}>
-            AI is only called when Nominatim fails — most messages never touch the AI API.
+            AI API calls happen once per message — only when a message has no explicit coordinates.
+            Cached Nominatim results are reused; no duplicate API calls.
           </div>
         </div>
       </div>

@@ -39,7 +39,6 @@ const TABS = [
 
   { group: 'Messages' },
   { id:'db',          label:'Database',       icon:<Database size={14}/> },
-  { id:'aigeocode',   label:'AI Geocode',     icon:<Brain size={14}/> },
   { id:'archive',     label:'Archive',        icon:<Archive size={14}/> },
   { id:'stats',       label:'Statistics',     icon:<BarChart2 size={14}/> },
   { id:'dedup',       label:'Dedup',          icon:<Copy size={14}/> },
@@ -64,6 +63,7 @@ const TABS = [
 
   { group: 'Site' },
   { id:'site',        label:'Site Settings',  icon:<Settings2 size={14}/> },
+  { id:'aigeocode',   label:'AI Geocode',     icon:<Brain size={14}/> },
   { id:'users',       label:'Users',          icon:<Users size={14}/> },
 ];
 

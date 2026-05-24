@@ -450,57 +450,68 @@ function _enqueue(work) {
   return slot;
 }
 
-async function geocodeAddress(candidates, countryCode = 'si', originalText = null) {
-  const queries = Array.isArray(candidates) ? candidates : [candidates].filter(Boolean);
-  // Candidates are pre-ranked by confidence; one well-formed query is enough
-  const toTry = queries.slice(0, 1).filter(q => q?.trim());
+// Internal helper — query Nominatim for one address string, rate-limited.
+async function _nominatim(query, countryCode) {
+  const key = `${query}|${countryCode}`;
+  if (_geoCache.has(key)) return _geoCache.get(key);
 
-  for (const query of toTry) {
-    const key = `${query}|${countryCode}`;
+  const result = await _enqueue(async () => {
     if (_geoCache.has(key)) return _geoCache.get(key);
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?` +
+        `q=${encodeURIComponent(query)}&countrycode=${countryCode}&format=json&limit=1`;
+      const r = await fetch(url, {
+        headers: { 'Accept-Language': 'sl,en', 'User-Agent': 'PagerMonitor/2.2' },
+        signal: ctrl.signal,
+      });
+      if (!r.ok) return null;
+      const data = await r.json();
+      if (data?.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), query };
+      return null;
+    } catch { return null; }
+    finally { clearTimeout(timer); }
+  });
 
-    const result = await _enqueue(async () => {
-      if (_geoCache.has(key)) return _geoCache.get(key);
-      const ctrl  = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
-      try {
-        const url = `https://nominatim.openstreetmap.org/search?` +
-          `q=${encodeURIComponent(query)}&countrycode=${countryCode}&format=json&limit=1`;
-        const r = await fetch(url, {
-          headers: { 'Accept-Language': 'sl,en', 'User-Agent': 'PagerMonitor/2.2' },
-          signal: ctrl.signal,
-        });
-        if (!r.ok) return null;
-        const data = await r.json();
-        if (data?.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), query };
-        return null;
-      } catch { return null; }
-      finally { clearTimeout(timer); }
-    });
-
-    if (result) {
-      _geoCache.set(key, result);
-      if (_geoCache.size > 500) _geoCache.delete(_geoCache.keys().next().value);
-      return result;
-    }
+  if (result) {
+    _geoCache.set(key, result);
+    if (_geoCache.size > 500) _geoCache.delete(_geoCache.keys().next().value);
   }
+  return result;
+}
 
-  // ── AI fallback ─────────────────────────────────────────────────────────────
-  // When Nominatim found nothing and we have the original message text, ask the
-  // configured AI provider to extract the address, then retry Nominatim once
-  // with the AI-formed query (no originalText passed → no infinite recursion).
+async function geocodeAddress(candidates, countryCode = 'si', originalText = null) {
+  const country = COUNTRY_NAMES[countryCode] || countryCode;
+
+  // ── 1. AI-first path ─────────────────────────────────────────────────────────
+  // When AI is enabled and we have the original message text, let the AI extract
+  // the address directly — it understands context (incident words, inflections,
+  // hyphenated places) better than the regex pipeline.
+  // If the AI call fails for any reason we fall through to regex candidates below.
   if (originalText) {
     try {
-      const { extractAddress } = require('./aiGeocode');
-      const extracted = await extractAddress(originalText);
-      if (extracted?.street) {
-        const parts = [extracted.street, extracted.houseNumber].filter(Boolean).join(' ');
-        const loc   = extracted.settlement ? `${parts}, ${extracted.settlement}` : parts;
-        const query = `${loc}, ${COUNTRY_NAMES[countryCode] || countryCode}`;
-        const aiResult = await geocodeAddress([query], countryCode); // no originalText → no loop
-        if (aiResult) return { ...aiResult, aiAssisted: true };
+      const { extractAddress, getConfig } = require('./aiGeocode');
+      if (getConfig().provider !== 'none') {
+        const extracted = await extractAddress(originalText);
+        if (extracted?.street) {
+          const parts = [extracted.street, extracted.houseNumber].filter(Boolean).join(' ');
+          const loc   = extracted.settlement ? `${parts}, ${extracted.settlement}` : parts;
+          const aiResult = await _nominatim(`${loc}, ${country}`, countryCode);
+          if (aiResult) return { ...aiResult, aiAssisted: true };
+        }
       }
-    } catch (_) { /* AI unavailable — degrade silently */ }
+    } catch (_) { /* AI unavailable — fall through to regex pipeline */ }
+  }
+
+  // ── 2. Regex-pipeline candidates (fallback) ──────────────────────────────────
+  // Used when AI is disabled, not reachable, or returned no usable address.
+  const queries = Array.isArray(candidates) ? candidates : [candidates].filter(Boolean);
+  const toTry   = queries.slice(0, 1).filter(q => q?.trim());
+
+  for (const query of toTry) {
+    const result = await _nominatim(query, countryCode);
+    if (result) return result;
   }
 
   return null;
