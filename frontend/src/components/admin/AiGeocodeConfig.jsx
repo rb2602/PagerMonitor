@@ -397,15 +397,37 @@ export default function AiGeocodeConfig() {
           <div className="pm-section-title">Ollama settings</div>
 
           <InfoCard>
-            <strong>Local, free, no account needed.</strong> Ollama runs an LLM on your own machine.<br />
-            <strong>Setup on Raspberry Pi:</strong><br />
+            <strong>Local, free, no account needed.</strong> Ollama runs an LLM on your own machine.
+            No data ever leaves your server — fully private.<br /><br />
+
+            <strong>Install (Linux / Proxmox / RPi):</strong>
             <code style={{ fontSize: '0.72rem', display: 'block', margin: '0.3rem 0',
               background: 'var(--bg-0)', padding: '0.3rem 0.5rem', borderRadius: '0.3rem' }}>
-              curl -fsSL https://ollama.com/install.sh | sh<br />
-              ollama pull llama3.2:1b
+              curl -fsSL https://ollama.com/install.sh | sh
             </code>
-            <strong>RAM requirements:</strong> 1b model ≈ 800 MB · 3b model ≈ 2 GB<br />
-            <strong>Speed on RPi 4:</strong> 1b model ~10 s · 3b model ~25 s per response<br />
+
+            <strong>Recommended model by hardware:</strong><br />
+            <table style={{ width: '100%', borderCollapse: 'collapse', margin: '0.4rem 0', fontSize: '0.72rem' }}>
+              <tbody>
+                <tr>
+                  <td style={{ paddingRight: '0.75rem', color: 'var(--text-3)', whiteSpace: 'nowrap', paddingBottom: '0.2rem' }}>Raspberry Pi (1–2 GB RAM)</td>
+                  <td><code>ollama pull llama3.2:1b</code> — ~10 s/req</td>
+                </tr>
+                <tr>
+                  <td style={{ paddingRight: '0.75rem', color: 'var(--text-3)', whiteSpace: 'nowrap', paddingBottom: '0.2rem' }}>Proxmox VM / server (2–4 GB RAM)</td>
+                  <td><code>ollama pull llama3.2:3b</code> — ~4 s/req ✓ recommended</td>
+                </tr>
+                <tr>
+                  <td style={{ paddingRight: '0.75rem', color: 'var(--text-3)', whiteSpace: 'nowrap', paddingBottom: '0.2rem' }}>Server with 6+ GB RAM</td>
+                  <td><code>ollama pull llama3.1:8b</code> — ~12 s/req, best accuracy</td>
+                </tr>
+                <tr>
+                  <td style={{ paddingRight: '0.75rem', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Server with GPU passthrough</td>
+                  <td><code>ollama pull llama3.1:8b</code> — &lt;2 s/req</td>
+                </tr>
+              </tbody>
+            </table>
+
             <ExtLink href="https://ollama.com/library">Browse all Ollama models</ExtLink>
             {' · '}
             <ExtLink href="https://ollama.com">ollama.com</ExtLink>
