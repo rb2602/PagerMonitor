@@ -48,11 +48,48 @@ function removeSubscription(endpoint) {
 
 // ── Send ──────────────────────────────────────────────────────────────────────
 
-async function sendPushToAll(payload) {
+async function sendPushPerUser(msg) {
   if (!webpush) return;
-  const subs = getDb().prepare('SELECT * FROM push_subscriptions').all();
+  const subs = getDb().prepare(`
+    SELECT ps.*, unp.push_enabled, unp.push_mode,
+           unp.push_group_ids, unp.push_capcodes, unp.push_keywords
+    FROM push_subscriptions ps
+    LEFT JOIN user_notif_prefs unp ON unp.user_id = ps.user_id
+  `).all();
   if (!subs.length) return;
-  await Promise.allSettled(subs.map(sub => _send(sub, payload)));
+
+  const alias = msg.alias_name || msg.alias || msg.capcode;
+  const payload = {
+    title: `📟 ${alias}`,
+    body:  msg.message || '(tone / numeric only)',
+    tag:   `pm-${msg.capcode}`,
+    data:  { capcode: msg.capcode, timestamp: msg.timestamp },
+  };
+
+  const eligible = subs.filter(sub => _matchesPushPrefs(msg, sub));
+  await Promise.allSettled(eligible.map(sub => _send(sub, payload)));
+}
+
+function _matchesPushPrefs(msg, sub) {
+  // No prefs row means the user never configured prefs — default to send all
+  if (sub.push_enabled === null || sub.push_enabled === undefined) return true;
+  if (!sub.push_enabled) return false;
+  const mode = sub.push_mode || 'all';
+  if (mode === 'all') return true;
+  if (mode === 'groups') {
+    const ids = JSON.parse(sub.push_group_ids || '[]').map(Number);
+    return msg.group_id != null && ids.includes(Number(msg.group_id));
+  }
+  if (mode === 'aliases' || mode === 'capcodes') {
+    const caps = JSON.parse(sub.push_capcodes || '[]');
+    return caps.includes(msg.capcode);
+  }
+  if (mode === 'keywords') {
+    const kws  = JSON.parse(sub.push_keywords || '[]');
+    const text = (msg.message || '').toLowerCase();
+    return kws.some(kw => kw && text.includes(kw.toLowerCase()));
+  }
+  return true;
 }
 
 async function _send(sub, payload) {
@@ -60,11 +97,10 @@ async function _send(sub, payload) {
     await webpush.sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
       JSON.stringify(payload),
-      { TTL: 3600 }  // discard if not delivered within 1 hour
+      { TTL: 3600 }
     );
   } catch (err) {
     if (err.statusCode === 410 || err.statusCode === 404) {
-      // Expired subscription — clean up silently
       getDb().prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint);
     } else {
       logger.warn(`Push send failed: ${err.message}`);
@@ -72,4 +108,4 @@ async function _send(sub, payload) {
   }
 }
 
-module.exports = { initWebPush, getPublicKey, saveSubscription, removeSubscription, sendPushToAll };
+module.exports = { initWebPush, getPublicKey, saveSubscription, removeSubscription, sendPushPerUser };

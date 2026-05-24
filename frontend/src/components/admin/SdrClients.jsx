@@ -20,15 +20,18 @@ const CFG_FIELDS = [
 
 function fmtTime(ts) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleString('sl-SI', {
+  // SQLite datetime('now') is UTC with no timezone suffix — append Z so JS parses it as UTC
+  const normalized = (ts.includes('T') || ts.endsWith('Z')) ? ts : ts.replace(' ', 'T') + 'Z';
+  return new Date(normalized).toLocaleString('sl-SI', {
     hour12:false, day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit',
   });
 }
 function fmtSilent(sec) {
-  if (sec < 60)    return `${sec}s ago`;
-  if (sec < 3600)  return `${Math.floor(sec/60)}m ago`;
-  if (sec < 86400) return `${Math.floor(sec/3600)}h ago`;
-  return `${Math.floor(sec/86400)}d ago`;
+  if (sec < 60)         return `${sec}s ago`;
+  if (sec < 3600)       return `${Math.floor(sec/60)}m ago`;
+  if (sec < 86400)      return `${Math.floor(sec/3600)}h ago`;
+  if (sec < 86400 * 30) return `${Math.floor(sec/86400)}d ago`;
+  return 'offline';
 }
 
 function Flash({ msg }) {
@@ -98,10 +101,11 @@ function ClientCard({ client, configs, onRemove, onSaveConfig, flash }) {
           { label:'Last seen',      value: fmtSilent(client.silentSec), color: client.online ? 'var(--accent-green)' : 'var(--accent-amber)' },
           { label:'Frequency',      value: client.freq || '—', color:'var(--text-2)' },
           { label:'Protocols',      value: client.protocols || '—', color:'var(--text-2)' },
-          { label:'First seen',     value: fmtTime(client.firstSeen), color:'var(--text-3)' },
-        ].map(({label, value, color}) => (
+          { label:'First seen',     value: fmtTime(client.firstSeen), color:'var(--text-3)', span: 2 },
+        ].map(({label, value, color, span}) => (
           <div key={label} style={{ background:'var(--bg-0)', padding:'0.4rem 0.5rem',
-            borderRadius:'0.4rem', border:'1px solid var(--border-soft)' }}>
+            borderRadius:'0.4rem', border:'1px solid var(--border-soft)',
+            gridColumn: span ? `span ${span}` : undefined }}>
             <div style={{ fontSize:'0.6rem', color:'var(--text-3)', marginBottom:'0.15rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>{label}</div>
             <div style={{ fontFamily:'monospace', fontSize:'0.78rem', fontWeight:600, color, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={value}>{value}</div>
           </div>
@@ -132,7 +136,7 @@ function ClientCard({ client, configs, onRemove, onSaveConfig, flash }) {
           <Flash msg={cfgMsg}/>
           {existingCfg?.version && (
             <div style={{ fontSize:'0.7rem', color:'var(--text-3)', fontFamily:'monospace', marginBottom:'0.5rem' }}>
-              Current version on server: <span style={{ color:'var(--accent-blue)' }}>{existingCfg.version}</span>
+              Config version: <span style={{ color:'var(--accent-blue)' }}>{existingCfg.version}</span>
               {' · '}Updated: {fmtTime(existingCfg.updatedAt)}
             </div>
           )}
@@ -206,7 +210,7 @@ export default function SdrClients() {
         <button className="pm-btn" onClick={load}><RefreshCw size={12}/> Refresh</button>
       </h2>
       <p style={{ fontSize:'0.82rem', color:'var(--text-3)', marginBottom:'1rem', lineHeight:1.6 }}>
-        Remote Raspberry Pi clients. Online = seen within 5 minutes. Use <strong>Config</strong> to push SDR settings remotely without SSH.
+        Remote Raspberry Pi clients. Online = seen within 90 seconds. Use <strong>Config</strong> to push SDR settings remotely without SSH.
       </p>
 
       <Flash msg={msg}/>
@@ -225,7 +229,7 @@ export default function SdrClients() {
       ))}
 
       <div style={{ fontSize:'0.72rem', color:'var(--text-3)', fontFamily:'monospace', marginTop:'0.75rem' }}>
-        Auto-refreshes every 15 seconds · Online = seen within 5 minutes
+        Auto-refreshes every 15 seconds · Online = seen within 90 seconds
       </div>
     </div>
   );

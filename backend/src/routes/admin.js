@@ -1,7 +1,8 @@
 const express = require('express');
 const router  = express.Router();
 const os      = require('os');
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
+const { version } = require('../../package.json');
 
 const { requireAdmin, requireEditor } = require('../services/auth');
 const { startSdrPipeline, stopSdrPipeline, restartSdrPipeline, getStatus, getLogs } = require('../services/sdr');
@@ -12,6 +13,7 @@ const { getDb, getStats, getMessageStats,
         getKeywordAlerts, upsertKeywordAlert, deleteKeywordAlert,
         getWebhooks, upsertWebhook, deleteWebhook,
         addAuditLog, getAuditLog,
+        deleteMessage,
         getSetting: _gs, setSetting: _ss } = require('../services/database');
 const { getConfig, updateConfig, testNotification } = require('../services/notifications');
 const { getSdrConfig, saveSdrConfig, getDedupConfig, saveDedupConfig,
@@ -70,7 +72,7 @@ router.get('/system', adminOnly, (_req, res) => {
     platform: os.platform(), arch: os.arch(), cpus: os.cpus().length,
     hostname: os.hostname(), nodeVer: process.version,
     wsClients: getClientCount(), stats: getStats(),
-    mode: process.env.MODE || 'single', version: '2.0.0',
+    mode: process.env.MODE || 'single', version,
     disk,
   });
 });
@@ -120,6 +122,42 @@ router.delete('/db/purge', adminOnly, (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+router.delete('/messages/:id', adminOnly, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id || isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    deleteMessage(id);
+    addAuditLog(req.session?.username||'admin', 'message.delete', `id=${id}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/messages/:id/regeocode', adminOnly, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id || isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    const row = getDb().prepare('SELECT message FROM messages WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ ok: false, reason: 'Message not found' });
+
+    const cc = (_gs('site_settings', {}).geocodeCountry || 'si');
+    const { parseLocation, geocodeAddress } = require('../utils/parseLocation');
+    const loc = parseLocation(row.message, cc);
+    if (!loc) return res.json({ ok: false, reason: 'No location candidates found' });
+    if (loc.type === 'coords') {
+      getDb().prepare('UPDATE messages SET lat=?, lng=? WHERE id=?').run(loc.lat, loc.lng, id);
+      require('../services/websocket').broadcast({ type: 'message_location', id, lat: loc.lat, lng: loc.lng });
+      addAuditLog(req.session?.username||'admin', 'message.regeocode', `id=${id} type=coords`);
+      return res.json({ ok: true, lat: loc.lat, lng: loc.lng, query: loc.raw });
+    }
+    const result = await geocodeAddress(loc.candidates || [], cc, row.message);
+    if (!result) return res.json({ ok: false, reason: 'Nominatim returned no results', query: loc.candidates[0] });
+    getDb().prepare('UPDATE messages SET lat=?, lng=? WHERE id=?').run(result.lat, result.lng, id);
+    require('../services/websocket').broadcast({ type: 'message_location', id, lat: result.lat, lng: result.lng });
+    addAuditLog(req.session?.username||'admin', 'message.regeocode', `id=${id} q="${result.query}"`);
+    res.json({ ok: true, lat: result.lat, lng: result.lng, query: result.query });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/db/export', adminOnly, (_req, res) => {
   try {
     const rows    = getDb().prepare('SELECT * FROM messages ORDER BY id ASC').all();
@@ -135,7 +173,7 @@ router.get('/db/stats', adminOnly, (_req, res) => {
   try {
     const db = getDb();
     const total    = db.prepare('SELECT COUNT(*) as n FROM messages').get();
-    const today    = db.prepare("SELECT COUNT(*) as n FROM messages WHERE date(timestamp)=date('now')").get();
+    const today    = db.prepare("SELECT COUNT(*) as n FROM messages WHERE date(timestamp,'localtime')=date('now','localtime')").get();
     const lastHour = db.prepare("SELECT COUNT(*) as n FROM messages WHERE timestamp >= strftime('%Y-%m-%dT%H:%M:%SZ', datetime('now','-1 hour'))").get();
     const protocols = db.prepare('SELECT protocol, COUNT(*) as n FROM messages GROUP BY protocol ORDER BY n DESC').all();
     const topCodes  = db.prepare('SELECT capcode, COUNT(*) as n FROM messages GROUP BY capcode ORDER BY n DESC LIMIT 10').all();
@@ -283,6 +321,59 @@ router.put('/site-settings', adminOnly, (req, res) => {
     addAuditLog(req.session?.username||'admin', 'site.settings', `publicMode=${!!publicMode}`);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Geo data download (SSE) ───────────────────────────────────────────────────
+// Streams stdout/stderr from fetchStreets.js + fetchPlaces.js back to the browser.
+// Uses fetch()-streaming on the frontend (not EventSource) so Bearer auth works.
+router.get('/geo-data/fetch', adminOnly, (req, res) => {
+  const cc = /^[a-z]{2}$/.test(req.query.cc || '') ? req.query.cc : 'si';
+
+  res.setHeader('Content-Type',  'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection',    'keep-alive');
+  res.flushHeaders();
+
+  const send = obj => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+
+  // Keepalive so the connection survives the ~60 s download window
+  const hb = setInterval(() => { if (!res.writableEnded) res.write(': ping\n\n'); }, 20_000);
+  req.on('close', () => clearInterval(hb));
+
+  const scriptsDir = require('path').join(__dirname, '../../scripts');
+
+  function runScript(file, onDone) {
+    send({ type: 'log', text: `\n▶ ${file}\n` });
+    const child = spawn('node', [require('path').join(scriptsDir, file), cc], {
+      cwd: require('path').join(__dirname, '../../'),
+    });
+    child.stdout.on('data', d => send({ type: 'log', text: d.toString() }));
+    child.stderr.on('data', d => send({ type: 'log', text: d.toString() }));
+    child.on('close', code => {
+      if (code !== 0) {
+        send({ type: 'error', text: `${file} exited with code ${code}` });
+        clearInterval(hb);
+        res.end();
+      } else {
+        onDone();
+      }
+    });
+    child.on('error', err => {
+      send({ type: 'error', text: err.message });
+      clearInterval(hb);
+      res.end();
+    });
+  }
+
+  runScript('fetchStreets.js', () => {
+    runScript('fetchPlaces.js', () => {
+      send({ type: 'done' });
+      clearInterval(hb);
+      res.end();
+    });
+  });
+
+  addAuditLog(req.session?.username || 'admin', 'geo.fetch', `cc=${cc}`);
 });
 
 // ── Client key ────────────────────────────────────────────────────────────────
@@ -456,6 +547,49 @@ router.post('/archive/run', adminOnly, (req, res) => {
     const days  = parseInt(req.body.days, 10) || cfg.afterDays || 30;
     const count = archiveOldMessages(days);
     res.json({ ok: true, archived: count, days });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── AI Geocode ────────────────────────────────────────────────────────────────
+const aiGeocode = require('../utils/aiGeocode');
+
+router.get('/ai-geocode/config', adminOnly, (_req, res) => {
+  try {
+    const cfg = aiGeocode.getConfig();
+    // Never send key values to the frontend — send only whether they are set and from where
+    res.json({
+      provider:        cfg.provider,
+      groqKeySaved:    !!cfg.groqKey,
+      groqKeySource:   process.env.GROQ_API_KEY   ? 'env' : (cfg.groqKey   ? 'db' : 'none'),
+      groqModel:       cfg.groqModel,
+      openaiKeySaved:  !!cfg.openaiKey,
+      openaiKeySource: process.env.OPENAI_API_KEY ? 'env' : (cfg.openaiKey ? 'db' : 'none'),
+      openaiModel:     cfg.openaiModel,
+      ollamaUrl:       cfg.ollamaUrl,
+      ollamaModel:     cfg.ollamaModel,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/ai-geocode/config', adminOnly, (req, res) => {
+  try {
+    aiGeocode.saveConfig(req.body);
+    addAuditLog(req.session?.username || 'admin', 'ai_geocode.config', `provider=${req.body.provider}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/ai-geocode/status', adminOnly, async (_req, res) => {
+  try { res.json(await aiGeocode.checkStatus()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/ai-geocode/test', adminOnly, async (req, res) => {
+  try {
+    const text = (req.body.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'text is required' });
+    const extracted = await aiGeocode.extractAddress(text);
+    res.json({ ok: !!extracted?.street, extracted: extracted || null });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

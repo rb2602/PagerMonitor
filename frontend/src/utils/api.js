@@ -8,7 +8,7 @@ function authHeaders(extra = {}) {
 }
 
 async function req(method, path, body, isAdmin = false) {
-  const opts = { method, headers: isAdmin ? authHeaders() : { 'Content-Type': 'application/json' } };
+  const opts = { method, headers: authHeaders() };
   if (body !== undefined) opts.body = JSON.stringify(body);
   const r = await fetch(`${BASE}${path}`, opts);
   if (!r.ok) {

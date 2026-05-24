@@ -5,11 +5,11 @@ const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
 const api  = (p) => fetch(`${BASE}${p}`,{headers:{'Authorization':`Bearer ${tok()}`}}).then(r=>r.json());
 
-function Bar({ value, max, color='var(--accent-green)', label, sublabel }) {
+function Bar({ value, max, color='var(--accent-green)', label, sublabel, labelWidth='80px' }) {
   const pct = max > 0 ? (value / max) * 100 : 0;
   return (
     <div style={{display:'flex',alignItems:'center',gap:'0.5rem',marginBottom:'0.2rem'}}>
-      <div style={{width:'80px',fontSize:'0.65rem',color:'var(--text-3)',fontFamily:'monospace',textAlign:'right',flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={label}>{label}</div>
+      <div style={{width:labelWidth,fontSize:'0.65rem',color:'var(--text-3)',fontFamily:'monospace',textAlign:'right',flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={label}>{label}</div>
       <div style={{flex:1,height:'14px',background:'var(--bg-3)',borderRadius:'2px',overflow:'hidden'}}>
         <div style={{width:`${pct}%`,height:'100%',background:color,borderRadius:'2px',transition:'width 0.4s'}}/>
       </div>
@@ -61,31 +61,32 @@ export default function StatsDashboard() {
           ? <div style={{color:'var(--text-3)',fontSize:'0.8rem'}}>No messages in last 30 days</div>
           : stats.daily.map(r=>(
             <Bar key={r.day} value={r.n} max={maxDaily}
-              label={new Date(r.day).toLocaleDateString('sl-SI',{day:'numeric',month:'numeric'})}
+              label={new Date(r.day + 'T12:00:00').toLocaleDateString('sl-SI',{day:'numeric',month:'numeric'})}
               color='var(--accent-green)'/>
           ))}
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1rem'}}>
-        {/* Top capcodes */}
-        <div className="pm-card">
-          <div className="pm-section-title">Top capcodes</div>
-          {stats.topCodes.length === 0
-            ? <div style={{color:'var(--text-3)',fontSize:'0.8rem'}}>No data</div>
-            : stats.topCodes.map(r=>(
-              <Bar key={r.capcode} value={r.n} max={maxCode} label={r.capcode} color='var(--accent-amber)'/>
-            ))}
-        </div>
+      {/* Top capcodes */}
+      <div className="pm-card" style={{marginBottom:'1rem'}}>
+        <div className="pm-section-title">Top capcodes</div>
+        {stats.topCodes.length === 0
+          ? <div style={{color:'var(--text-3)',fontSize:'0.8rem'}}>No data</div>
+          : stats.topCodes.map(r=>(
+            <Bar key={r.capcode} value={r.n} max={maxCode}
+              label={r.name ? `${r.capcode} — ${r.name}` : r.capcode}
+              labelWidth='200px'
+              color='var(--accent-amber)'/>
+          ))}
+      </div>
 
-        {/* Protocol breakdown */}
-        <div className="pm-card">
-          <div className="pm-section-title">By protocol</div>
-          {stats.byProtocol.length === 0
-            ? <div style={{color:'var(--text-3)',fontSize:'0.8rem'}}>No data</div>
-            : stats.byProtocol.map(r=>(
-              <Bar key={r.protocol} value={r.n} max={stats.byProtocol[0].n} label={r.protocol||'unknown'} color='var(--accent-blue)'/>
-            ))}
-        </div>
+      {/* Protocol breakdown */}
+      <div className="pm-card">
+        <div className="pm-section-title">By protocol</div>
+        {stats.byProtocol.length === 0
+          ? <div style={{color:'var(--text-3)',fontSize:'0.8rem'}}>No data</div>
+          : stats.byProtocol.map(r=>(
+            <Bar key={r.protocol} value={r.n} max={stats.byProtocol[0].n} label={r.protocol||'unknown'} color='var(--accent-blue)'/>
+          ))}
       </div>
     </div>
   );

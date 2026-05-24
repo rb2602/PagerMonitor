@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Settings2, Save, Clock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Settings2, Save, Clock, Download } from 'lucide-react';
 import { useSite } from '../../context/SiteContext.jsx';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
@@ -49,6 +49,11 @@ export default function SiteSettings() {
   const [publicMode, setPublicMode]         = useState(DEFAULTS.publicMode);
   const [savingMap, setSavingMap]       = useState(false);
   const [mapMsg, setMapMsg]             = useState(null);
+
+  const [fetching,   setFetching]   = useState(false);
+  const [fetchLog,   setFetchLog]   = useState([]);
+  const [fetchError, setFetchError] = useState(false);
+  const logRef = useRef(null);
 
   const [savingSite,  setSavingSite]  = useState(false);
   const [savingBadge, setSavingBadge] = useState(false);
@@ -110,6 +115,47 @@ export default function SiteSettings() {
       flashMap('ok', 'Map settings saved');
     } catch (e) { flashMap('err', e.message); }
     finally { setSavingMap(false); }
+  };
+
+  const startFetch = async () => {
+    setFetching(true);
+    setFetchLog([]);
+    setFetchError(false);
+    const append = text => setFetchLog(l => {
+      const updated = [...l, text];
+      setTimeout(() => logRef.current?.scrollTo(0, logRef.current.scrollHeight), 0);
+      return updated;
+    });
+    try {
+      const res = await fetch(`${BASE}/admin/geo-data/fetch?cc=${encodeURIComponent(geocodeCountry)}`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let   buf     = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const ev = JSON.parse(line.slice(6));
+            if (ev.type === 'log')   append(ev.text);
+            if (ev.type === 'error') { setFetchError(true); append(`\n✗ ${ev.text}`); setFetching(false); return; }
+            if (ev.type === 'done')  { append('\n✓ Done'); setFetching(false); }
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      setFetchError(true);
+      append(`\n✗ ${e.message}`);
+    } finally {
+      setFetching(false);
+    }
   };
 
   const nameParts = siteForm.siteName.trim().match(/^(.*?)(\S+)$/) || ['', '', siteForm.siteName];
@@ -279,9 +325,36 @@ export default function SiteSettings() {
           </div>
         </div>
 
+        {/* ── Geo data download ──────────────────────────────── */}
+        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+          <label className="pm-label">Street &amp; place data</label>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginBottom: '0.6rem' }}>
+            Download OSM streets and settlements for <code style={{ color: 'var(--accent-blue)' }}>{geocodeCountry}</code> to
+            improve address geocoding accuracy. Runs <code>fetchStreets</code> then <code>fetchPlaces</code> — takes 1–3 min.
+          </div>
+          <button className="pm-btn" onClick={startFetch} disabled={fetching}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Download size={13} />
+            {fetching ? 'Downloading…' : `Update geo data (${geocodeCountry.toUpperCase()})`}
+          </button>
+          {fetchLog.length > 0 && (
+            <pre ref={logRef} style={{
+              marginTop: '0.6rem', padding: '0.5rem 0.75rem',
+              background: 'var(--bg-0)', border: `1px solid ${fetchError ? 'color-mix(in srgb, var(--accent-red) 40%, var(--border))' : 'var(--border)'}`,
+              borderRadius: '0.4rem', fontSize: '0.70rem', fontFamily: 'monospace',
+              maxHeight: '160px', overflowY: 'auto',
+              color: fetchError ? 'var(--accent-red)' : 'var(--text-2)',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0,
+            }}>
+              {fetchLog.join('')}
+            </pre>
+          )}
+        </div>
+
         <Flash msg={mapMsg} />
 
-        <button className="pm-btn pm-btn-primary" onClick={saveMap} disabled={savingMap}>
+        <button className="pm-btn pm-btn-primary" onClick={saveMap} disabled={savingMap}
+          style={{ marginTop: '1rem' }}>
           <Save size={13}/> {savingMap ? 'Saving…' : 'Save map settings'}
         </button>
 

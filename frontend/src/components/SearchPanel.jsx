@@ -1,7 +1,7 @@
 import { X, SearchX } from 'lucide-react';
 import MessageRow from './MessageRow.jsx';
 
-export default function SearchPanel({ results, searching, onClear, highlightRules = [], groups = [], onFilter }) {
+export default function SearchPanel({ results, searching, onClear, highlightRules = [], groups = [], onFilter, onMapClick, onDelete }) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -30,7 +30,7 @@ export default function SearchPanel({ results, searching, onClear, highlightRule
           </div>
         )}
         {!searching && results?.map((msg, i) => (
-          <MessageRow key={msg.id ?? i} msg={msg} isNew={false} highlightRules={highlightRules} groups={groups} onFilter={onFilter} />
+          <MessageRow key={msg.id ?? i} msg={msg} isNew={false} highlightRules={highlightRules} groups={groups} onFilter={onFilter} onMapClick={onMapClick} onDelete={onDelete} />
         ))}
       </div>
     </div>

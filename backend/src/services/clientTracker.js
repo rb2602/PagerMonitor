@@ -38,6 +38,7 @@ function ensureTables() {
     ['protocols',       'TEXT'],
     ['last_message',    'TEXT'],
     ['last_message_ts', 'TEXT'],
+    ['sdr_running',     'INTEGER'],
   ]) {
     if (!cols.includes(col)) {
       db.exec(`ALTER TABLE sdr_clients ADD COLUMN ${col} ${def}`);
@@ -75,17 +76,21 @@ function recordClientMessage(clientId, ip, extra = {}) {
 }
 
 // ── Record status ping (no message) ──────────────────────────────────────────
-function recordClientPing(clientId, ip) {
+function recordClientPing(clientId, ip, extra = {}) {
   if (!clientId) return;
   try {
     ensureTables();
+    const sdrRunning = extra.sdrRunning != null ? (extra.sdrRunning ? 1 : 0) : null;
     getDb().prepare(`
-      INSERT INTO sdr_clients (id, last_seen, ip)
-      VALUES (?, datetime('now'), ?)
+      INSERT INTO sdr_clients (id, last_seen, ip, freq, protocols, sdr_running)
+      VALUES (?, datetime('now'), ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
-        last_seen = datetime('now'),
-        ip = COALESCE(excluded.ip, ip)
-    `).run(clientId, ip || null);
+        last_seen   = datetime('now'),
+        ip          = COALESCE(excluded.ip, ip),
+        freq        = COALESCE(excluded.freq, freq),
+        protocols   = COALESCE(excluded.protocols, protocols),
+        sdr_running = COALESCE(excluded.sdr_running, sdr_running)
+    `).run(clientId, ip || null, extra.freq || null, extra.protocols || null, sdrRunning);
   } catch (e) {
     logger.warn(`clientTracker.recordClientPing: ${e.message}`);
   }
@@ -98,7 +103,9 @@ function getClients() {
     const rows = getDb().prepare('SELECT * FROM sdr_clients ORDER BY last_seen DESC').all();
     const now  = Date.now();
     return rows.map(r => {
-      const lastMs = new Date(r.last_seen).getTime();
+      // SQLite datetime('now') is UTC without 'Z' — append Z so JS parses as UTC
+      const tsStr  = r.last_seen?.includes('T') ? r.last_seen : (r.last_seen || '').replace(' ', 'T') + 'Z';
+      const lastMs = new Date(tsStr).getTime();
       return {
         id:             r.id,
         firstSeen:      r.first_seen,
@@ -110,13 +117,24 @@ function getClients() {
         protocols:      r.protocols || null,
         lastMessage:    r.last_message || null,
         lastMessageTs:  r.last_message_ts || null,
-        online:         (now - lastMs) < 5 * 60 * 1000,
+        online:         (now - lastMs) < 90 * 1000,
         silentSec:      Math.round((now - lastMs) / 1000),
+        sdrRunning:     r.sdr_running == null ? null : r.sdr_running === 1,
       };
     });
   } catch (e) {
     logger.warn(`clientTracker.getClients: ${e.message}`);
     return [];
+  }
+}
+
+function recordClientOffline(clientId) {
+  if (!clientId) return;
+  try {
+    ensureTables();
+    getDb().prepare(`UPDATE sdr_clients SET last_seen = '1970-01-01 00:00:00' WHERE id = ?`).run(clientId);
+  } catch (e) {
+    logger.warn(`clientTracker.recordClientOffline: ${e.message}`);
   }
 }
 
@@ -158,7 +176,11 @@ function getAllClientConfigs() {
 function saveClientConfig(clientId, config) {
   try {
     ensureTables();
-    const json    = JSON.stringify(config);
+    // Strip empty/null values — empty means "use Pi's .env default"
+    const filtered = Object.fromEntries(
+      Object.entries(config).filter(([, v]) => v !== '' && v != null)
+    );
+    const json    = JSON.stringify(filtered);
     const version = crypto.createHash('sha256').update(json).digest('hex').slice(0, 8);
     getDb().prepare(`
       INSERT INTO client_configs (client_id, config_json, version, updated_at)
@@ -176,7 +198,7 @@ function saveClientConfig(clientId, config) {
 }
 
 module.exports = {
-  recordClientMessage, recordClientPing,
+  recordClientMessage, recordClientPing, recordClientOffline,
   getClients, resetClient,
   getClientConfig, getAllClientConfigs, saveClientConfig,
 };

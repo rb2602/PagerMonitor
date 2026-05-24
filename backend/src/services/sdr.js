@@ -1,4 +1,5 @@
 const { spawn }  = require('child_process');
+const { PassThrough } = require('stream');
 const iconv      = require('iconv-lite');
 const { insertMessage, getKeywordAlerts, getSetting } = require('./database');
 const { broadcast }          = require('./websocket');
@@ -7,6 +8,7 @@ const { sendNotifications }  = require('./notifications');
 const { sendWebhooks }       = require('./webhooks');
 const { recordMessage }      = require('./deadair');
 const { sendUserEmailNotifications } = require('./emailNotifier');
+const { sendPushPerUser }    = require('./webpush');
 const { parseLocation, geocodeAddress } = require('../utils/parseLocation');
 const { loadSdrConfigIntoEnv, getDedupConfig, getDongleConfigs } = require('./config');
 const logger = require('../utils/logger');
@@ -14,7 +16,7 @@ const logger = require('../utils/logger');
 // ── Regexes ───────────────────────────────────────────────────────────────────
 const EOT_RE    = /<EOT>|<NUL>|<STX>|<ETX>|\x04/gi;
 const POCSAG_RE = /^(POCSAG\d+):\s*Address:\s*(\d+)\s+Function:\s*(\d)\s+(?:Alpha|Numeric|Skyper):\s*(.*)/i;
-const FLEX_RE   = /^FLEX:\s*(\d+)\[(\d)\]\s+(\w+)\s+(.*)/i;
+const FLEX_RE   = /^FLEX:\s*(\d+)\s*\[(\d)\]\s+(\w+)\s+(.*)/i;
 
 // ── Build CLI args from process.env ───────────────────────────────────────────
 function buildRtlFmArgs() {
@@ -119,6 +121,8 @@ let stopping         = false;   // true while we are intentionally tearing down
 let restartTimer     = null;
 let consecutiveFails = 0;
 let isFirstStart     = true;
+let generation       = 0;
+let singleDongleWatchdog = null;
 let logBuffer        = [];
 const MAX_LOG_LINES  = 300;
 
@@ -140,8 +144,10 @@ function addLog(source, line) {
 
 // ── Kill only OUR child processes ─────────────────────────────────────────────
 function killOwnProcesses() {
-  try { if (mmonProc) { mmonProc.stdout?.unpipe(); mmonProc.kill('SIGTERM'); } } catch (_) {}
-  try { if (rtlProc)  { rtlProc.kill('SIGTERM'); } } catch (_) {}
+  clearInterval(singleDongleWatchdog); singleDongleWatchdog = null;
+  try { if (rtlProc) rtlProc.stdout?.unpipe(); } catch (_) {}
+  try { if (mmonProc) mmonProc.kill('SIGTERM'); } catch (_) {}
+  try { if (rtlProc)  rtlProc.kill('SIGTERM'); } catch (_) {}
   rtlProc  = null;
   mmonProc = null;
 }
@@ -152,6 +158,7 @@ async function startSdrPipeline() {
 
   killOwnProcesses();
   stopMultiDonglePipelines();
+  const myGen = ++generation;
 
   if (isFirstStart) {
     logger.info('First start — waiting 3s for USB to settle…');
@@ -165,24 +172,25 @@ async function startSdrPipeline() {
   const dongles = getDongleConfigs();
   if (Array.isArray(dongles) && dongles.length > 1) {
     logger.info(`Starting ${dongles.length} SDR dongles in parallel`);
-    donglePipelines       = dongles.map((d, i) => spawnDonglePipeline(d, `[dongle-${d.device ?? i}]`));
-    sdrStatus.running     = true;
+    donglePipelines       = dongles.map((d, i) => spawnDonglePipeline(d, `[dongle-${d.device ?? i}]`, myGen));
+    sdrStatus.running     = false;
     sdrStatus.startedAt   = new Date().toISOString();
     sdrStatus.error       = null;
     sdrStatus.freq        = dongles.map(d => d.freq).join(', ');
     sdrStatus.protocols   = dongles.map(d => d.protocols || process.env.MULTIMON_PROTOCOLS || '');
     sdrStatus.dongleCount = dongles.length;
     sdrStatus.dongleStatuses = donglePipelines.map(p => ({
-      device: p.cfg.device, freq: p.cfg.freq, label: p.label,
-      running: true, error: null, lastMessage: null,
+      device: p.cfg.device, freq: p.cfg.freq, protocols: p.cfg.protocols, label: p.label,
+      running: false, error: null, lastMessage: null,
     }));
     broadcast({ type: 'sdr_status', status: getStatus() });
     consecutiveFails = 0;
     return;
   }
 
-  // Single dongle — reset count
-  sdrStatus.dongleCount = 1;
+  // Single dongle — clear multi-dongle state so the status bar switches back to the single-dot view
+  sdrStatus.dongleCount    = 1;
+  sdrStatus.dongleStatuses = null;
 
   // ── Single dongle mode (original) ─────────────────────────────────────────
   const rtlArgs  = buildRtlFmArgs();
@@ -196,7 +204,31 @@ async function startSdrPipeline() {
 
     logger.info(`Spawned rtl_fm PID=${rtlProc.pid}  multimon-ng PID=${mmonProc.pid}`);
 
-    rtlProc.stdout.pipe(mmonProc.stdin);
+    const rtlTap = new PassThrough();
+    let lastRtlMs = Date.now();
+    rtlTap.on('data', () => {
+      lastRtlMs = Date.now();
+      if (!sdrStatus.running && myGen === generation) {
+        sdrStatus.running = true;
+        broadcast({ type: 'sdr_status', status: getStatus() });
+      }
+    });
+    rtlTap.on('error', () => {});
+    rtlProc.stdout.pipe(rtlTap);
+    rtlTap.pipe(mmonProc.stdin);
+    rtlProc.stdout.on('error', () => {});
+    mmonProc.stdin.on('error',  () => {});
+    singleDongleWatchdog = setInterval(() => {
+      if (myGen !== generation) { clearInterval(singleDongleWatchdog); singleDongleWatchdog = null; return; }
+      if (Date.now() - lastRtlMs > 20000) {
+        clearInterval(singleDongleWatchdog); singleDongleWatchdog = null;
+        addLog('system', 'rtl_fm watchdog: no audio data for 20s — restarting');
+        sdrStatus.running = false;
+        sdrStatus.error   = 'rtl_fm stalled';
+        broadcast({ type: 'sdr_status', status: getStatus() });
+        if (!stopping) scheduleRestart();
+      }
+    }, 10000);
 
     rtlProc.stderr.on('data', d => {
       d.toString().split('\n').forEach(l => { l = l.trim(); if (l) { logger.debug(`rtl_fm: ${l}`); addLog('rtl_fm', l); } });
@@ -224,11 +256,13 @@ async function startSdrPipeline() {
     });
 
     rtlProc.on('error', err => {
+      if (myGen !== generation) return;
       addLog('rtl_fm', `ERROR: ${err.message}`);
       sdrStatus.error = err.message;
       if (!stopping) scheduleRestart();
     });
     mmonProc.on('error', err => {
+      if (myGen !== generation) return;
       addLog('mmon', `ERROR: ${err.message}`);
       sdrStatus.error = err.message;
       if (!stopping) scheduleRestart();
@@ -236,17 +270,18 @@ async function startSdrPipeline() {
 
     // exit handler — only restart if WE didn't cause the exit
     rtlProc.on('exit', (code, signal) => {
+      if (myGen !== generation) return;
       addLog('rtl_fm', `exited (code=${code} signal=${signal})`);
       sdrStatus.running = false;
       if (!stopping) scheduleRestart();
     });
     mmonProc.on('exit', (code, signal) => {
+      if (myGen !== generation) return;
       addLog('mmon', `exited (code=${code} signal=${signal})`);
       sdrStatus.running = false;
       if (!stopping) scheduleRestart();
     });
 
-    sdrStatus.running   = true;
     sdrStatus.startedAt = new Date().toISOString();
     sdrStatus.error     = null;
     sdrStatus.rtlArgs   = rtlArgs;
@@ -254,9 +289,7 @@ async function startSdrPipeline() {
     sdrStatus.freq      = process.env.RTL_FM_FREQ || '';
     sdrStatus.protocols = (process.env.MULTIMON_PROTOCOLS || '').split(/\s+/);
     consecutiveFails    = 0;
-
-    broadcast({ type: 'sdr_status', status: getStatus() });
-    logger.info('SDR pipeline running');
+    logger.info('SDR pipeline spawned — waiting for audio data');
 
   } catch (err) {
     logger.error(`Failed to spawn: ${err.message}`);
@@ -426,8 +459,8 @@ function handleLine(line) {
   // Geocode address first if no explicit coords, so notifications include a map link
   ;(async () => {
     let notifyPayload = payload;
-    if (!lat && location.candidates?.length) {
-      const result = await geocodeAddress(location.candidates, geocodeCountry).catch(() => null);
+    if (!lat) {
+      const result = await geocodeAddress(location.candidates || [], geocodeCountry, parsed.message).catch(() => null);
       if (result) {
         try { require('./database').getDb().prepare('UPDATE messages SET lat=?, lng=? WHERE id=?').run(result.lat, result.lng, id); } catch (_) {}
         broadcast({ type: 'message_location', id, lat: result.lat, lng: result.lng });
@@ -437,22 +470,44 @@ function handleLine(line) {
     sendNotifications(notifyPayload).catch(e => logger.warn(`Notification: ${e.message}`));
     sendWebhooks(notifyPayload).catch(() => {});
     sendUserEmailNotifications(notifyPayload).catch(() => {});
+    sendPushPerUser(notifyPayload).catch(() => {});
   })();
 
   logger.info(`[${msg.protocol}] ${msg.capcode} (${aliasName || 'unknown'}): ${msg.message.substring(0, 80)}`);
 }
 
 // ── Multi-dongle pipeline spawner ─────────────────────────────────────────────
-function spawnDonglePipeline(dongle, label) {
+function spawnDonglePipeline(dongle, label, myGen) {
   const rtlArgs  = buildRtlFmArgsForDongle(dongle);
   const mmonArgs = buildMmonArgsForDongle(dongle);
   logger.info(`${label} Starting: device=${dongle.device} freq=${dongle.freq || process.env.RTL_FM_FREQ}`);
 
-  const state = { running: true, error: null, restarts: 0, lastMessage: null };
+  const state = { running: false, error: null, restarts: 0, lastMessage: null };
 
   const rtl  = spawn('rtl_fm',      rtlArgs,  { stdio: ['ignore', 'pipe', 'pipe'] });
   const mmon = spawn('multimon-ng', mmonArgs, { stdio: ['pipe',   'pipe', 'pipe'] });
-  rtl.stdout.pipe(mmon.stdin);
+  const tap = new PassThrough();
+  let lastRtlMs = Date.now();
+  tap.on('data', () => {
+    lastRtlMs = Date.now();
+    if (!state.running && myGen === generation) {
+      state.running = true;
+      broadcastDongleStatus();
+    }
+  });
+  tap.on('error', () => {});
+  rtl.stdout.pipe(tap);
+  tap.pipe(mmon.stdin);
+  rtl.stdout.on('error', () => {});
+  mmon.stdin.on('error',  () => {});
+  const watchdog = setInterval(() => {
+    if (myGen !== generation) { clearInterval(watchdog); return; }
+    if (Date.now() - lastRtlMs > 20000) {
+      clearInterval(watchdog);
+      logger.warn(`${label} watchdog: no audio data for 20s — restarting`);
+      if (!stopping) onFail('watchdog', 'rtl_fm stalled');
+    }
+  }, 10000);
 
   rtl.stderr.on('data',  d => d.toString().split('\n').forEach(l => { if (l.trim()) addLog('rtl_fm',  `${label} ${l.trim()}`); }));
   mmon.stderr.on('data', d => d.toString().split('\n').forEach(l => { if (l.trim()) addLog('mmon',    `${label} ${l.trim()}`); }));
@@ -473,21 +528,42 @@ function spawnDonglePipeline(dongle, label) {
     }
   });
 
-  const onExit = (src) => (c, s) => {
-    logger.info(`${label} ${src} exited (${c}/${s})`);
-    if (!stopping) {
-      state.running = false;
-      state.error   = `${src} exited (${c}/${s})`;
+  const otherPipelinesAlive = () => donglePipelines.some(p => p.state !== state && p.rtlProc && p.rtlProc.exitCode === null);
+
+  let perDongleTimer = null;
+  const schedulePerDongleRestart = () => {
+    if (perDongleTimer || stopping || myGen !== generation) return;
+    // 5s fixed retry — acts as a poll for "is the dongle now connected?"
+    perDongleTimer = setTimeout(() => {
+      perDongleTimer = null;
+      if (stopping || myGen !== generation) return;
+      const idx = donglePipelines.findIndex(p => p.state === state);
+      if (idx === -1) return;
+      logger.info(`${label} Retrying dongle…`);
+      donglePipelines[idx] = spawnDonglePipeline(dongle, label, myGen);
       broadcastDongleStatus();
-      scheduleRestart();
-    }
+    }, 5000);
+  };
+
+  const onFail = (src, err) => {
+    state.running = false;
+    state.error   = err;
+    broadcastDongleStatus();
+    if (otherPipelinesAlive()) schedulePerDongleRestart();
+    else scheduleRestart();
+  };
+
+  const onExit = (src) => (c, s) => {
+    if (myGen !== generation) return;
+    logger.info(`${label} ${src} exited (${c}/${s})`);
+    if (!stopping) onFail(src, `${src} exited (${c}/${s})`);
   };
   rtl.on('exit',  onExit('rtl_fm'));
   mmon.on('exit', onExit('multimon-ng'));
-  rtl.on('error',  e => { logger.error(`${label} rtl_fm: ${e.message}`);  state.running = false; state.error = e.message; if (!stopping) { broadcastDongleStatus(); scheduleRestart(); } });
-  mmon.on('error', e => { logger.error(`${label} mmon: ${e.message}`);     state.running = false; state.error = e.message; if (!stopping) { broadcastDongleStatus(); scheduleRestart(); } });
+  rtl.on('error',  e => { if (myGen !== generation) return; logger.error(`${label} rtl_fm: ${e.message}`);  if (!stopping) onFail('rtl_fm',  e.message); });
+  mmon.on('error', e => { if (myGen !== generation) return; logger.error(`${label} mmon: ${e.message}`);     if (!stopping) onFail('mmon',    e.message); });
 
-  return { rtlProc: rtl, mmonProc: mmon, cfg: dongle, label, state };
+  return { rtlProc: rtl, mmonProc: mmon, cfg: dongle, label, state, watchdog };
 }
 
 function broadcastDongleStatus() {
@@ -507,7 +583,9 @@ function broadcastDongleStatus() {
 
 function stopMultiDonglePipelines() {
   for (const p of donglePipelines) {
-    try { p.mmonProc?.stdout?.unpipe(); p.mmonProc?.kill('SIGTERM'); } catch (_) {}
+    try { clearInterval(p.watchdog); } catch (_) {}
+    try { if (p.rtlProc) p.rtlProc.stdout?.unpipe(); } catch (_) {}
+    try { p.mmonProc?.kill('SIGTERM'); } catch (_) {}
     try { p.rtlProc?.kill('SIGTERM'); } catch (_) {}
   }
   donglePipelines = [];

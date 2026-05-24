@@ -6,6 +6,7 @@
 
 'use strict';
 
+const { version } = require('../../package.json');
 const express = require('express');
 const router  = express.Router();
 
@@ -16,8 +17,9 @@ const { parseLocation, geocodeAddress } = require('../utils/parseLocation');
 const { sendNotifications }     = require('../services/notifications');
 const { sendWebhooks }          = require('../services/webhooks');
 const { sendUserEmailNotifications } = require('../services/emailNotifier');
+const { sendPushPerUser }       = require('../services/webpush');
 const { recordMessage }         = require('../services/deadair');
-const { recordClientMessage, recordClientPing, getClientConfig } = require('../services/clientTracker');
+const { recordClientMessage, recordClientPing, recordClientOffline, getClientConfig } = require('../services/clientTracker');
 const { getDedupConfig }        = require('../services/config');
 const logger                    = require('../utils/logger');
 
@@ -129,8 +131,8 @@ router.post('/message', requireClientKey, (req, res) => {
     // Geocode address first if no explicit coords, so notifications include a map link
     ;(async () => {
       let notifyPayload = payload;
-      if (!lat && location.candidates?.length) {
-        const result = await geocodeAddress(location.candidates, geocodeCountry).catch(() => null);
+      if (!lat) {
+        const result = await geocodeAddress(location.candidates || [], geocodeCountry, message).catch(() => null);
         if (result) {
           try { require('../services/database').getDb().prepare('UPDATE messages SET lat=?, lng=? WHERE id=?').run(result.lat, result.lng, id); } catch (_) {}
           broadcast({ type: 'message_location', id, lat: result.lat, lng: result.lng });
@@ -140,6 +142,7 @@ router.post('/message', requireClientKey, (req, res) => {
       sendNotifications(notifyPayload).catch(e => logger.warn(`Notification: ${e.message}`));
       sendWebhooks(notifyPayload).catch(() => {});
       sendUserEmailNotifications(notifyPayload).catch(() => {});
+      sendPushPerUser(notifyPayload).catch(() => {});
     })();
 
     logger.info(`[client:${clientId}] [${protocol}] ${capcode}: ${(message || '').substring(0, 60)}`);
@@ -155,7 +158,14 @@ router.post('/message', requireClientKey, (req, res) => {
 router.get('/status', requireClientKey, (req, res) => {
   const clientId = req.headers['x-client-id'] || 'unknown';
   recordClientPing(clientId, req.ip);
-  res.json({ ok: true, server: 'PagerMonitor', version: '2.0.0' });
+  res.json({ ok: true, server: 'PagerMonitor', version });
+});
+
+// POST /client/offline — client notifies server it is shutting down gracefully
+router.post('/offline', requireClientKey, (req, res) => {
+  const clientId = req.headers['x-client-id'] || '';
+  if (clientId) recordClientOffline(clientId);
+  res.json({ ok: true });
 });
 
 // GET /client/config — client polls for remote config changes
@@ -164,7 +174,11 @@ router.get('/config', requireClientKey, (req, res) => {
   const clientId = req.headers['x-client-id'] || '';
   if (!clientId) return res.status(400).json({ error: 'X-Client-Id header required' });
 
-  recordClientPing(clientId, req.ip);
+  recordClientPing(clientId, req.ip, {
+    freq:       req.query.freq       || null,
+    protocols:  req.query.protocols  || null,
+    sdrRunning: req.query.sdrRunning === 'true' ? true : req.query.sdrRunning === 'false' ? false : null,
+  });
 
   const cfg = getClientConfig(clientId);
   if (!cfg) return res.json({ config: null, version: null }); // no config set yet

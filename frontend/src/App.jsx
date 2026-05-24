@@ -30,7 +30,7 @@ export default function App() {
   const [showProfile, setShowProfile]   = useState(false);
   const [resetToken]                    = useState(() => new URLSearchParams(window.location.search).get('reset'));
 
-  const { messages, wsStatus, sdrStatus, prependHistory, appendHistory } = useWebSocket(BACKEND_URL);
+  const { messages, wsStatus, sdrStatus, prependHistory, appendHistory, removeMessage } = useWebSocket(BACKEND_URL);
 
   const [filters, setFilters]               = useState({ capcode:'', keyword:'', alias:'', group:'' });
   const [searchResults, setSearchResults]   = useState(null);
@@ -119,7 +119,16 @@ export default function App() {
   }, []);
 
   const handleSearch = useCallback(async q => {
-    if (!q.trim()) { setSearchResults(null); handleSetView('feed'); return; }
+    if (!q.trim()) {
+      setSearchResults(null);
+      // Only return to feed when leaving search — don't override admin/map/archive on initial mount
+      setView(prev => {
+        const next = prev === 'search' ? 'feed' : prev;
+        if (next !== prev) sessionStorage.setItem('pm_view', next);
+        return next;
+      });
+      return;
+    }
     setSearching(true);
     try { const r = await fetchSearch(q); setSearchResults(r); handleSetView('search'); }
     catch (e) { console.warn(e); }
@@ -214,7 +223,8 @@ export default function App() {
               onLoadMore={safePage === totalPages - 1 ? handleLoadMore : null}
               loadingMore={loadingMore} noMoreMessages={noMoreMessages}
               totalInDb={serverStatus?.stats?.total || 0}
-              totalLoaded={messages.length} />
+              totalLoaded={messages.length}
+              onDelete={removeMessage} />
           </div>
           {/* MapView always mounted so geocoding/state persists across tab switches */}
           <div style={{ position:'absolute', inset:0, display: view === 'map' ? 'block' : 'none' }}>
@@ -229,7 +239,8 @@ export default function App() {
           <div style={{ position:'absolute', inset:0, display: view === 'search' ? 'flex' : 'none', flexDirection:'column' }}>
             <SearchPanel results={searchResults} searching={searching}
               highlightRules={highlightRules} groups={groups}
-              onFilter={handleRowFilter}
+              onFilter={handleRowFilter} onMapClick={handleMapClick}
+              onDelete={id => setSearchResults(r => r?.filter(m => m.id !== id))}
               onClear={() => { setSearchResults(null); handleSetView('feed'); }} />
           </div>
           {view === 'admin' && (

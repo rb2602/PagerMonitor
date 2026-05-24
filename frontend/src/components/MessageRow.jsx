@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { StickyNote } from 'lucide-react';
+import { StickyNote, ChevronDown, ChevronRight, MapPin, Trash2, RefreshCw } from 'lucide-react';
 import MessageNotes from './MessageNotes.jsx';
-import { ChevronDown, ChevronRight, MapPin } from 'lucide-react';
 import { useSite } from '../context/SiteContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
+
+const BASE = import.meta.env.VITE_BACKEND_URL || '';
 
 function fmtTime(ts) { return new Date(ts).toLocaleTimeString('sl-SI', { hour12:false }); }
 function fmtDate(ts) { return new Date(ts).toLocaleDateString('sl-SI', { day:'2-digit', month:'2-digit', year:'numeric' }); }
@@ -13,7 +15,7 @@ function highlightSegments(text, rules) {
   for (const rule of rules.filter(r => r.enabled && r.pattern)) {
     try {
       const escaped = rule.is_regex ? rule.pattern : rule.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re      = new RegExp(`(${escaped})`, 'gi');
+      const re      = new RegExp(`((?:${escaped}))`, 'gi');
       const parts   = text.split(re);
       if (parts.length <= 1) continue;
       const hl = { color: rule.color || '#ffb800', bg: rule.bg || (rule.color || '#ffb800') + '35' };
@@ -37,7 +39,7 @@ function HighlightedMsg({ text, rules, style }) {
 }
 
 // Fixed-width badge column keeps alignment in desktop feed
-const BADGE_COL_W = '120px';
+const BADGE_COL_W = '130px';
 
 function Badge({ label, color, title, onClick }) {
   return (
@@ -53,10 +55,16 @@ function Badge({ label, color, title, onClick }) {
   );
 }
 
-export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], onFilter, onMapClick }) {
+export default function MessageRow({ msg, index=0, isNew, highlightRules=[], groups=[], onFilter, onMapClick, onDelete }) {
   const [expanded, setExpanded] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [reGeocoding, setReGeocoding] = useState(false);
+  const [geoResult, setGeoResult] = useState(null);
+  const [geoError, setGeoError] = useState(null);
   const { showMapButton = true } = useSite();
+  const { user, token } = useAuth();
   // Only show map button if message has confirmed stored coordinates in DB
   const hasLocation  = !!(msg.lat && msg.lng);
   const isKeyAlert   = !!(window.__pm_alerts?.has(msg.id));
@@ -85,46 +93,56 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
   return (
     <>
       <div
-        style={{ borderBottom:'1px solid var(--border-soft)', cursor:'pointer', transition:'background 0.1s',
+        style={{ borderBottom:'1px solid var(--border-soft)',
+          borderLeft:`3px solid ${rowColor || 'transparent'}`,
+          cursor:'pointer', transition:'background 0.15s',
           background: isKeyAlert ? 'color-mix(in srgb, var(--accent-amber) 12%, var(--bg-0))'
                     : rowColor   ? `color-mix(in srgb, ${rowColor} 10%, var(--bg-0))`
+                    : hovered    ? 'var(--bg-2)'
                     : isNew      ? 'color-mix(in srgb, var(--accent-green) 4%, var(--bg-0))'
+                    : index % 2 === 1 ? 'var(--bg-1)'
                     : 'transparent',
           animation: isKeyAlert ? 'keyalert-blink 0.6s ease-in-out 5' : 'none' }}
         onClick={() => setExpanded(e => !e)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
         {/* ── DESKTOP row (hidden on mobile) ───────────────────── */}
-        <div className="msg-desktop" style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.42rem 0.75rem' }}>
+        <div className="msg-desktop" style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.5rem 0.75rem' }}>
           <span style={{ color:'var(--text-3)', flexShrink:0, lineHeight:1, width:'12px' }}>
             {expanded ? <ChevronDown size={11}/> : <ChevronRight size={11}/>}
           </span>
           {/* Date + Time — two lines */}
-          <div style={{ fontFamily:'monospace', fontSize:'0.7rem', color:'var(--text-3)',
-            flexShrink:0, minWidth:'62px', textAlign:'right', lineHeight:1.3 }}>
-            <div style={{ fontSize:'0.68rem' }}>{fmtDate(msg.timestamp)}</div>
-            <div>{fmtTime(msg.timestamp)}</div>
+          <div style={{ fontFamily:'monospace', flexShrink:0, minWidth:'62px', textAlign:'right', lineHeight:1.3 }}>
+            <div style={{ fontSize:'0.65rem', color:'var(--text-2)' }}>{fmtDate(msg.timestamp)}</div>
+            <div style={{ fontSize:'0.72rem', color:'var(--text-2)' }}>{fmtTime(msg.timestamp)}</div>
           </div>
           {/* Capcode */}
           <span onClick={e => { e.stopPropagation(); onFilter?.('capcode', msg.capcode); }}
             title="Click to filter"
-            style={{ fontFamily:'monospace', fontSize:'0.78rem', fontWeight:700,
+            style={{ fontFamily:'monospace', fontSize:'0.75rem', fontWeight:700,
               color:'var(--accent-amber)', flexShrink:0, minWidth:'70px', cursor:'pointer',
-              borderRadius:'0.2rem', padding:'0 0.1rem' }}
-            onMouseEnter={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-amber) 12%,transparent)'}
-            onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+              borderRadius:'0.3rem', padding:'0.1rem 0.35rem', textAlign:'center',
+              background:'color-mix(in srgb,var(--accent-amber) 8%,transparent)',
+              border:'1px solid color-mix(in srgb,var(--accent-amber) 22%,transparent)',
+              transition:'background 0.1s' }}
+            onMouseEnter={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-amber) 20%,transparent)'}
+            onMouseLeave={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-amber) 8%,transparent)'}>
             {msg.capcode}
           </span>
           {/* Badge column — fixed width keeps message aligned; wrap so both badges are always visible */}
-          <div style={{ flexShrink:0, width:BADGE_COL_W, display:'flex', alignItems:'flex-start', gap:'0.3rem', flexWrap:'wrap' }}>
+          <div style={{ flexShrink:0, width:BADGE_COL_W, display:'flex', alignItems:'flex-start', justifyContent:'center', gap:'0.3rem', flexWrap:'wrap' }}>
             {alias     && <Badge label={alias}     color={aliasColor} title="Filter by alias"  onClick={() => onFilter?.('alias',alias)} />}
             {groupName && <Badge label={groupName} color={groupColor} title="Filter by group"  onClick={() => onFilter?.('group',groupName)} />}
           </div>
           {/* Message */}
-          <div style={{ flex:1, minWidth:0, overflow:'hidden' }}>
+          <div style={{ flex:1, minWidth:0, overflow:'hidden',
+            WebkitMaskImage:'linear-gradient(to right, black 82%, transparent 100%)',
+            maskImage:'linear-gradient(to right, black 82%, transparent 100%)' }}>
             {msg.message
               ? <HighlightedMsg text={msg.message} rules={highlightRules}
-                  style={{ fontFamily:'monospace', fontSize:'0.82rem', display:'block',
-                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'var(--text-1)' }} />
+                  style={{ fontFamily:'monospace', fontSize:'0.875rem', display:'block',
+                    whiteSpace:'nowrap', color:'var(--text-2)' }} />
               : <span style={{ fontFamily:'monospace', fontSize:'0.82rem', color:'var(--text-3)', fontStyle:'italic' }}>
                   [tone / numeric only]
                 </span>
@@ -162,24 +180,26 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
           </span>
           {isNew && <span style={{ fontSize:'0.6rem', fontWeight:800, color:'var(--accent-green)',
             background:'color-mix(in srgb,var(--accent-green) 15%,transparent)',
-            padding:'0.1rem 0.35rem', borderRadius:'0.3rem', flexShrink:0 }}>NEW</span>}
+            padding:'0.1rem 0.35rem', borderRadius:'0.3rem', flexShrink:0,
+            animation:'new-pulse 2s ease-in-out infinite' }}>NEW</span>}
         </div>
 
         {/* ── MOBILE card (hidden on desktop) ──────────────────── */}
         <div className="msg-mobile" style={{ display:'none', padding:'0.5rem 0.75rem', gap:'0.2rem', flexDirection:'column' }}>
-          {/* Top line: time + capcode + badges + NEW */}
-          <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', flexWrap:'wrap' }}>
-            <span style={{ fontFamily:'monospace', fontSize:'0.68rem', color:'var(--text-3)', flexShrink:0, lineHeight:1.3 }}>
-              <span style={{ fontSize:'0.62rem', opacity:0.7 }}>{fmtDate(msg.timestamp)} </span>
-              {fmtTime(msg.timestamp)}
+          {/* Top line: time + capcode + icons */}
+          <div style={{ display:'flex', alignItems:'center', gap:'0.4rem' }}>
+            <span style={{ fontFamily:'monospace', flexShrink:0, lineHeight:1.3 }}>
+              <span style={{ fontSize:'0.62rem', color:'var(--text-2)' }}>{fmtDate(msg.timestamp)} </span>
+              <span style={{ fontSize:'0.7rem', color:'var(--text-2)' }}>{fmtTime(msg.timestamp)}</span>
             </span>
             <span onClick={e => { e.stopPropagation(); onFilter?.('capcode', msg.capcode); }}
-              style={{ fontFamily:'monospace', fontSize:'0.75rem', fontWeight:700,
-                color:'var(--accent-amber)', flexShrink:0, cursor:'pointer' }}>
+              style={{ fontFamily:'monospace', fontSize:'0.73rem', fontWeight:700,
+                color:'var(--accent-amber)', flexShrink:0, cursor:'pointer',
+                borderRadius:'0.3rem', padding:'0.1rem 0.3rem',
+                background:'color-mix(in srgb,var(--accent-amber) 8%,transparent)',
+                border:'1px solid color-mix(in srgb,var(--accent-amber) 22%,transparent)' }}>
               {msg.capcode}
             </span>
-            {alias     && <Badge label={alias}     color={aliasColor} onClick={() => onFilter?.('alias',alias)} />}
-            {groupName && <Badge label={groupName} color={groupColor} onClick={() => onFilter?.('group',groupName)} />}
             <span style={{ flex:1 }} />
             {showMapButton && hasLocation && (
               <span onClick={e => { e.stopPropagation(); onMapClick?.(msg); }}
@@ -203,13 +223,21 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
             </span>
             {isNew && <span style={{ fontSize:'0.58rem', fontWeight:800, color:'var(--accent-green)',
               background:'color-mix(in srgb,var(--accent-green) 15%,transparent)',
-              padding:'0.08rem 0.3rem', borderRadius:'0.25rem' }}>NEW</span>}
+              padding:'0.08rem 0.3rem', borderRadius:'0.25rem',
+              animation:'new-pulse 2s ease-in-out infinite' }}>NEW</span>}
             <span style={{ color:'var(--text-3)', lineHeight:1 }}>
               {expanded ? <ChevronDown size={10}/> : <ChevronRight size={10}/>}
             </span>
           </div>
+          {/* Badges — second line on mobile */}
+          {(alias || groupName) && (
+            <div style={{ display:'flex', gap:'0.3rem', flexWrap:'wrap' }}>
+              {alias     && <Badge label={alias}     color={aliasColor} onClick={() => onFilter?.('alias',alias)} />}
+              {groupName && <Badge label={groupName} color={groupColor} onClick={() => onFilter?.('group',groupName)} />}
+            </div>
+          )}
           {/* Message — full wrapping on mobile */}
-          <div style={{ fontFamily:'monospace', fontSize:'0.82rem', color: msg.message ? 'var(--text-1)' : 'var(--text-3)',
+          <div style={{ fontFamily:'monospace', fontSize:'0.82rem', color: msg.message ? 'var(--text-2)' : 'var(--text-3)',
             fontStyle: msg.message ? 'normal' : 'italic', lineHeight:1.4,
             wordBreak:'break-word', whiteSpace:'normal' }}>
             {msg.message
@@ -221,8 +249,9 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
 
         {/* ── Expanded detail ───────────────────────────────────── */}
         {expanded && (
-          <div style={{ padding:'0.5rem 0.75rem 0.75rem 0.75rem', background:'var(--bg-1)',
-            borderTop:'1px solid var(--border-soft)', animation:'fadeIn 0.15s ease-out' }}>
+          <div style={{ padding:'0.6rem 0.75rem 0.85rem 1rem', background:'var(--bg-2)',
+            borderTop:'1px solid var(--border)', borderBottom:'2px solid var(--border)',
+            borderLeft:'3px solid var(--accent-blue)', animation:'fadeIn 0.15s ease-out' }}>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))', gap:'0.5rem', marginBottom:'0.6rem' }}>
               <Field label="Capcode"   v={msg.capcode} mono />
               <Field label="Protocol"  v={`${msg.protocol} @ ${msg.baud ?? '?'}bps`} />
@@ -230,6 +259,12 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
               <Field label="Date/Time" v={`${fmtDate(msg.timestamp)} ${fmtTime(msg.timestamp)}`} mono />
               {alias     && <Field label="Alias" v={alias} />}
               {groupName && <Field label="Group" v={groupName} />}
+              {(geoResult || (msg.lat && msg.lng)) && (
+                <Field label="Location" mono
+                  v={geoResult
+                    ? `${geoResult.lat.toFixed(5)}, ${geoResult.lng.toFixed(5)}`
+                    : `${msg.lat.toFixed(5)}, ${msg.lng.toFixed(5)}`} />
+              )}
             </div>
             {msg.message && (
               <div style={{ fontFamily:'monospace', fontSize:'0.82rem', color:'var(--text-1)',
@@ -242,6 +277,83 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
               <div style={{ marginTop:'0.35rem', fontFamily:'monospace', fontSize:'0.68rem',
                 color:'var(--text-3)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}
                 title={msg.raw}>RAW: {msg.raw}</div>
+            )}
+            {user?.role === 'admin' && msg.id && (
+              <div style={{ marginTop:'0.6rem', display:'flex', flexDirection:'column', gap:'0.35rem', alignItems:'flex-end' }}
+                onClick={e => e.stopPropagation()}>
+                <div style={{ display:'flex', gap:'0.4rem' }}>
+                  <button
+                    disabled={reGeocoding}
+                    onClick={async () => {
+                      setReGeocoding(true); setGeoResult(null); setGeoError(null);
+                      try {
+                        const r = await fetch(`${BASE}/admin/messages/${msg.id}/regeocode`, {
+                          method: 'POST',
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        const data = await r.json();
+                        if (data.ok) setGeoResult(data);
+                        else setGeoError(data.query ? `${data.reason || 'Geocoding failed'} | ${data.query}` : (data.reason || 'Geocoding failed'));
+                      } catch (e) {
+                        setGeoError(e.message);
+                      } finally {
+                        setReGeocoding(false);
+                      }
+                    }}
+                    title="Re-run geocoding for this message"
+                    style={{ display:'flex', alignItems:'center', gap:'0.3rem',
+                      fontSize:'0.7rem', fontFamily:'monospace', fontWeight:600,
+                      padding:'0.25rem 0.6rem', borderRadius:'0.35rem', cursor: reGeocoding ? 'wait' : 'pointer',
+                      background:'color-mix(in srgb,var(--accent-blue,#3b82f6) 10%,transparent)',
+                      border:'1px solid color-mix(in srgb,var(--accent-blue,#3b82f6) 30%,transparent)',
+                      color:'var(--accent-blue,#3b82f6)', transition:'background 0.1s' }}
+                    onMouseEnter={e => !reGeocoding && (e.currentTarget.style.background='color-mix(in srgb,var(--accent-blue,#3b82f6) 20%,transparent)')}
+                    onMouseLeave={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-blue,#3b82f6) 10%,transparent)'}>
+                    <RefreshCw size={11} style={{ animation: reGeocoding ? 'spin 1s linear infinite' : 'none' }}/>
+                    {reGeocoding ? 'Geocoding…' : 'Re-geocode'}
+                  </button>
+                  <button
+                    disabled={deleting}
+                    onClick={async () => {
+                      if (!confirm('Delete this message permanently?')) return;
+                      setDeleting(true);
+                      try {
+                        await fetch(`${BASE}/admin/messages/${msg.id}`, {
+                          method: 'DELETE',
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        onDelete?.(msg.id);
+                      } catch (_) {
+                        setDeleting(false);
+                      }
+                    }}
+                    title="Delete message"
+                    style={{ display:'flex', alignItems:'center', gap:'0.3rem',
+                      fontSize:'0.7rem', fontFamily:'monospace', fontWeight:600,
+                      padding:'0.25rem 0.6rem', borderRadius:'0.35rem', cursor: deleting ? 'wait' : 'pointer',
+                      background:'color-mix(in srgb,var(--accent-red,#ef4444) 10%,transparent)',
+                      border:'1px solid color-mix(in srgb,var(--accent-red,#ef4444) 30%,transparent)',
+                      color:'var(--accent-red,#ef4444)', transition:'background 0.1s' }}
+                    onMouseEnter={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-red,#ef4444) 20%,transparent)'}
+                    onMouseLeave={e => e.currentTarget.style.background='color-mix(in srgb,var(--accent-red,#ef4444) 10%,transparent)'}>
+                    <Trash2 size={11}/>{deleting ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
+                {geoResult && (
+                  <div style={{ fontSize:'0.68rem', fontFamily:'monospace', color:'var(--accent-green,#4ade80)' }}>
+                    {geoResult.lat.toFixed(5)}, {geoResult.lng.toFixed(5)}
+                    {geoResult.query && <span style={{ color:'var(--text-3)', marginLeft:'0.5rem' }}>— {geoResult.query}</span>}
+                  </div>
+                )}
+                {geoError && (
+                  <div style={{ fontSize:'0.68rem', fontFamily:'monospace', color:'var(--accent-red,#ef4444)' }}>
+                    {geoError}
+                    {geoError.includes('|') && (
+                      <span style={{ color:'var(--text-3)' }}> — tried: {geoError.split('|')[1]}</span>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -265,6 +377,7 @@ export default function MessageRow({ msg, isNew, highlightRules=[], groups=[], o
           0%,100% { background: color-mix(in srgb, var(--accent-amber) 12%, var(--bg-0)); }
           50%      { background: color-mix(in srgb, var(--accent-amber) 35%, var(--bg-0)); }
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </>
   );

@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { Cpu, Database, Bell, Tag, Terminal, Server, Users, Highlighter,
-         Copy, Layers, Filter, Settings2, ChevronDown, Wifi,
-         BarChart2, Link, Radio, ClipboardList, Archive, Activity, HardDrive, Mail } from 'lucide-react';
+         Copy, Layers, Settings2, ChevronDown, Wifi,
+         BarChart2, Link, Radio, ClipboardList, Archive, Activity, HardDrive, Mail, Brain } from 'lucide-react';
 import ErrorBoundary  from '../ErrorBoundary.jsx';
 import SdrControl     from './SdrControl.jsx';
 import SystemStats    from './SystemStats.jsx';
 import DbTools        from './DbTools.jsx';
 import NotifConfig    from './NotifConfig.jsx';
-import NotifFilter    from './NotifFilter.jsx';
 import AliasManager   from './AliasManager.jsx';
 import GroupManager   from './GroupManager.jsx';
 import LogViewer      from './LogViewer.jsx';
@@ -25,9 +24,10 @@ import StatsDashboard from './StatsDashboard.jsx';
 import AuditLog       from './AuditLog.jsx';
 import ActivityFeed   from './ActivityFeed.jsx';
 import BackupRestore  from './BackupRestore.jsx';
-import EmailConfig    from './EmailConfig.jsx';
-import UserNotifPrefs from './UserNotifPrefs.jsx';
-import ArchiveConfig  from './ArchiveConfig.jsx';
+import EmailConfig      from './EmailConfig.jsx';
+import UserNotifPrefs  from './UserNotifPrefs.jsx';
+import ArchiveConfig   from './ArchiveConfig.jsx';
+import AiGeocodeConfig from './AiGeocodeConfig.jsx';
 
 const TABS = [
   { group: 'SDR' },
@@ -47,7 +47,6 @@ const TABS = [
 
   { group: 'Notifications' },
   { id:'notif',       label:'Services',       icon:<Bell size={14}/> },
-  { id:'notiffilter', label:'Filter',         icon:<Filter size={14}/> },
   { id:'webhooks',    label:'Webhooks',       icon:<Link size={14}/> },
   { id:'email',       label:'Email (SMTP)',   icon:<Mail size={14}/> },
   { id:'usernotif',   label:'User preferences', icon:<Bell size={14}/> },
@@ -64,6 +63,7 @@ const TABS = [
 
   { group: 'Site' },
   { id:'site',        label:'Site Settings',  icon:<Settings2 size={14}/> },
+  { id:'aigeocode',   label:'AI Geocode',     icon:<Brain size={14}/> },
   { id:'users',       label:'Users',          icon:<Users size={14}/> },
 ];
 
@@ -72,9 +72,9 @@ function TabContent({ tab, sdrStatus, serverStatus, onRulesChange, onGroupsChang
     case 'sdr':         return <SdrControl sdrStatus={sdrStatus} />;
     case 'system':      return <SystemStats serverStatus={serverStatus} />;
     case 'db':          return <DbTools />;
+    case 'aigeocode':   return <AiGeocodeConfig />;
     case 'stats':       return <StatsDashboard />;
     case 'notif':       return <NotifConfig />;
-    case 'notiffilter': return <NotifFilter />;
     case 'keyword':     return <KeywordAlerts />;
     case 'deadair':     return <DeadAirConfig />;
     case 'webhooks':    return <Webhooks />;
@@ -218,7 +218,18 @@ export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onG
                 display:'grid', gridTemplateColumns:'1fr 1fr',
                 gap:'0.2rem', padding:'0.5rem',
               }}>
-                {actualTabs.map(t => (
+                {visibleTabs.map((t, i) => t.group ? (
+                  <div key={`g-${i}`} style={{
+                    gridColumn:'1 / -1',
+                    padding:'0.4rem 0.55rem 0.1rem',
+                    fontSize:'0.58rem', fontWeight:700,
+                    textTransform:'uppercase', letterSpacing:'0.1em',
+                    color:'var(--text-3)',
+                    marginTop: i === 0 ? 0 : '0.25rem',
+                  }}>
+                    {t.group}
+                  </div>
+                ) : (
                   <button key={t.id} onClick={() => handleSetTab(t.id)} style={{
                     display:'flex', alignItems:'center', gap:'0.5rem',
                     padding:'0.55rem 0.75rem', borderRadius:'0.4rem',

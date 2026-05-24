@@ -61,6 +61,8 @@ Multiple RPi clients can forward to the same server — useful for monitoring mu
 
 ### Native install (systemd)
 
+#### Option A — Single device
+
 ```bash
 # 1. Install dependencies
 sudo apt update && sudo apt install -y rtl-sdr multimon-ng nodejs npm
@@ -79,8 +81,95 @@ sudo systemctl start pagermonitor
 
 # 5. Open browser
 # http://<pi-ip>:3000
-# Login: admin / admin123 (change immediately!)
+# Login: admin / <see "First login" section below for the password>
 ```
+
+#### Option B — Server (no SDR dongle)
+
+Run this on the machine that will host the web UI and database (Proxmox VM, NAS, PC).
+No RTL-SDR hardware required — the RPi client (next section) forwards decoded messages here.
+
+```bash
+# 1. Install Node.js only (no SDR tools needed)
+sudo apt update && sudo apt install -y nodejs npm
+
+# 2. Clone and install
+git clone https://github.com/dj3ky/pagermonitor.git ~/pagermonitor
+cd ~/pagermonitor
+bash install.sh --server
+
+# 3. Configure
+nano ~/pagermonitor/backend/.env
+# Set DISABLE_SDR=true
+
+# 4. Start
+sudo systemctl start pagermonitor
+
+# 5. Open browser and generate a client key for the RPi
+# http://<server-ip>:3000
+# Login: admin / <see "First login" section below for the password>
+# Then: Admin → Client Key → Generate → copy the key
+```
+
+#### Option B — RPi client
+
+Run this on the Raspberry Pi with the RTL-SDR dongle. It decodes pager traffic and
+forwards it to the server set up above. No web UI runs on the Pi itself.
+
+```bash
+# 1. Install dependencies
+sudo apt update && sudo apt install -y rtl-sdr multimon-ng nodejs npm
+
+# 2. Clone repo
+git clone https://github.com/dj3ky/pagermonitor.git ~/pagermonitor
+
+# 3. Run client installer (sets up systemd service pagermonitor-client)
+cd ~/pagermonitor/client
+bash install.sh
+
+# 4. Configure
+nano ~/pagermonitor/client/.env
+# Required:
+#   SERVER_URL=http://<server-ip>:3000
+#   CLIENT_KEY=<key copied from Admin → Client Key on the server>
+#   RTL_FM_FREQ=173.250M   (your local pager frequency)
+
+# 5. Start
+sudo systemctl start pagermonitor-client
+
+# 6. Watch logs
+sudo journalctl -u pagermonitor-client -f
+
+# 7. Verify connection
+# Server browser: Admin → SDR Clients — this Pi should appear as connected
+```
+
+### First login — finding your admin password
+
+On first boot (empty database), PagerMonitor generates a random admin password and prints it once to the log:
+
+```bash
+sudo journalctl -u pagermonitor -n 50 --no-pager | grep "Default admin"
+# ⚠  Default admin created  username=admin  password=3f9a1c...
+```
+
+**If you missed it**, set `DEFAULT_ADMIN_PASS` in `backend/.env` and wipe the user table so the first-run setup runs again:
+
+```bash
+# Stop the service
+sudo systemctl stop pagermonitor
+
+# Remove the database (all messages will be lost — back up first if needed)
+rm ~/pagermonitor/backend/data/pagermonitor.db
+
+# Set a known password for next start
+echo "DEFAULT_ADMIN_PASS=changeme123" >> ~/pagermonitor/backend/.env
+
+# Start again — the password will now be "changeme123"
+sudo systemctl start pagermonitor
+```
+
+Change the password immediately after login: **Admin → Users → admin → Change password**.
 
 ### Docker
 
@@ -122,7 +211,7 @@ Edit `backend/.env` (native) or `.env` (Docker):
 | `MULTIMON_PROTOCOLS` | `POCSAG1200` | Space-separated: `POCSAG512 POCSAG1200 FLEX` |
 | `MULTIMON_POCSAG_CHARSET` | _(empty)_ | e.g. `ISO-8859-2` for Slovenian Š Č Ž |
 | `LOG_LEVEL` | `info` | `error` / `warn` / `info` / `debug` |
-| `DEFAULT_ADMIN_PASS` | `admin123` | First-run admin password |
+| `DEFAULT_ADMIN_PASS` | _(random)_ | First-run admin password. If unset, a random password is generated and printed to the startup log. |
 
 All SDR settings can also be changed live in **Admin → SDR Control** without editing files.
 
@@ -164,11 +253,10 @@ Or configure per-dongle in **Admin → SDR Control → Multiple SDR dongles**.
 | | Dedup | Deduplicate identical messages within a time window |
 | | Highlights | Regex/text rules to colour-highlight messages in feed |
 | | Keyword Alerts | Flash/notify on messages matching keywords or patterns |
-| **Notifications** | Services | Discord, Telegram, Gotify, Pushover, MQTT — test each |
-| | Filter | Send to all messages or only selected capcodes/groups |
+| **Notifications** | Services | Discord, Telegram, Gotify, Pushover, MQTT — test each; global filter below controls which messages are sent |
 | | Webhooks | HTTP POST webhooks with HMAC-SHA256 signing |
 | | Email (SMTP) | Send email notifications via any SMTP provider |
-| | User preferences | Per-user notification filters (by group, alias, keyword) |
+| | User preferences | Per-user email and push filters (by group, alias, capcode, or keyword) |
 | **Aliases & Groups** | Groups | Organise aliases into groups/subgroups with colour coding |
 | | Aliases | Friendly names for capcodes, CSV import/export |
 | **System** | System | RAM, CPU, disk, uptime, connected clients |
@@ -212,9 +300,10 @@ Or configure per-dongle in **Admin → SDR Control → Multiple SDR dongles**.
 - Email — HTML formatted with Google Maps button
 - Webhooks — HTTP POST to any endpoint with HMAC-SHA256
 
-**Per-user email notifications**
-- Each user sets their own filter: all / by group / by alias / by capcode / by keyword
+**Per-user notifications (email + push)**
+- Each user sets independent filters for email and push: all / by group / by alias / by capcode / by keyword
 - Users manage their own preferences from the profile panel (username button in header)
+- Global filter (Admin → Notifications → Services) applies only to Discord, Telegram, Gotify, Pushover, and MQTT
 
 **Password reset**
 - "Forgot password" on login page → email with reset link (1 hour expiry)
@@ -307,15 +396,11 @@ Returns JSON — use with Uptime Kuma, Zabbix, etc.:
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Health check for monitoring |
-| `GET` | `/api/status` | Server + SDR status |
-| `GET` | `/api/history?limit=200&before=<id>` | Messages (paginated) |
-| `GET` | `/api/search?q=text` | Full-text search |
-| `GET` | `/api/aliases` | All aliases |
-| `GET` | `/api/groups` | All groups |
-| `GET` | `/api/archive?limit=50&q=text` | Archive search |
-| `GET` | `/api/archive/export?q=text` | Archive CSV download |
+| `GET` | `/api/site-settings` | Site name + public mode flag (shown on login page) |
 
 ### Auth required
+
+> When **Public Mode** is enabled in Admin → Site Settings, unauthenticated GET requests are also allowed to the feed endpoints below.
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -326,12 +411,26 @@ Returns JSON — use with Uptime Kuma, Zabbix, etc.:
 | `GET` | `/auth/me` | Current user info |
 | `PUT` | `/auth/me/email` | Update own email |
 | `GET/PUT` | `/auth/me/notif-prefs` | Own notification preferences |
+| `GET` | `/api/status` | Server + SDR status |
+| `GET` | `/api/history?limit=200&before=<id>` | Messages (paginated) |
+| `GET` | `/api/search?q=text` | Full-text search |
+| `GET` | `/api/aliases` | All aliases |
+| `GET` | `/api/groups` | All groups |
+| `GET` | `/api/archive?limit=50&q=text` | Archive search |
+| `GET` | `/api/archive/export?q=text` | Archive CSV download |
 | `GET` | `/api/messages/:id/notes` | Get notes for a message |
 | `POST` | `/api/messages/:id/notes` | Add note to a message |
 | `DELETE` | `/api/notes/:id` | Delete a note |
 | `GET` | `/api/push/vapid-public-key` | VAPID public key for push subscription |
 | `POST` | `/api/push/subscribe` | Subscribe device to background push notifications |
 | `DELETE` | `/api/push/subscribe` | Unsubscribe device from push notifications |
+
+### Editor required
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `PUT` | `/api/aliases/:capcode` | Create or update an alias |
+| `DELETE` | `/api/aliases/:capcode` | Delete an alias |
 
 ### Admin required
 
@@ -392,7 +491,7 @@ pagermonitor/
 │   │   ├── database.js            SQLite + FTS5 + migrations
 │   │   ├── websocket.js           WebSocket server + broadcast
 │   │   ├── sdr.js                 rtl_fm + multimon-ng (single + multi-dongle)
-│   │   ├── notifications.js       Discord, Telegram, Gotify, Pushover, browser push
+│   │   ├── notifications.js       Discord, Telegram, Gotify, Pushover, MQTT (global filter)
 │   │   ├── webpush.js             VAPID key management + Web Push API
 │   │   ├── emailNotifier.js       Per-user email notifications
 │   │   ├── email.js               SMTP + password reset tokens

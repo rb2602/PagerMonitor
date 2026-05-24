@@ -46,6 +46,18 @@ RTL-SDR dongle → rtl_fm → multimon-ng → Node.js → Browser (WebSocket)
 - Pins for messages with GPS coordinates extracted from message text
 - Three modes: **individual pins** · **clustered** · **heatmap**
 - Fly-to animation when clicking the map button on any message row
+- **Re-geocode** button on every message — retries address extraction and pins the result on the map
+
+### 🤖 AI-assisted geocoding (optional)
+When enabled, the raw pager message text is sent to an AI model to extract the street, house number, and settlement **before** falling back to the built-in regex pipeline — useful for unusual or abbreviated address formats that regex misses.
+
+| Provider | Cost | Notes |
+|---|---|---|
+| **Groq** | Free tier (14 400 req/day) | Llama 3.1 8B Instant — fastest option; no local hardware needed |
+| **OpenAI** | Paid (GPT-4o-mini) | Most accurate; requires an API key |
+| **Ollama** | Free / local | Runs on the same Raspberry Pi; no internet required. Llama 3.2 1B fits in 2 GB RAM |
+
+Configure under **Admin → Site → AI Geocode**. API keys are stored server-side and never sent to the browser. Disabling AI falls back silently to the regex pipeline with no data loss.
 
 ### 📋 Aliases & groups
 - Give capcodes friendly names: `1234567` → `Fire Station Alpha`
@@ -70,7 +82,7 @@ RTL-SDR dongle → rtl_fm → multimon-ng → Node.js → Browser (WebSocket)
 | **Email (SMTP)** | HTML formatted, Maps button, any SMTP provider |
 | **Webhooks** | HTTP POST to any endpoint, HMAC-SHA256 signed |
 
-**Per-user notification filters** — each user independently filters by group, alias, capcode, or keyword. Set your own preferences from the profile panel.
+**Per-user notification filters** — email and push each have independent filters per user (by group, alias, capcode, or keyword). The global filter on the Services page applies only to Discord, Telegram, Gotify, Pushover, and MQTT. Set preferences from the profile panel.
 
 ### 📲 PWA — installable app
 Install PagerMonitor directly to your home screen on Android, iOS, or desktop. No app store needed.
@@ -98,7 +110,7 @@ Run **multiple RTL-SDR dongles in parallel** — each on its own frequency, prot
 - Backup & restore as a single `.pmbackup` file
 
 ### ⚙️ Admin panel
-Dead air detection · Live log viewer · System stats · Webhook management · Audit log · Site settings · Dedup · Statistics dashboard
+Dead air detection · Live log viewer · System stats · Webhook management · Audit log · Site settings · Dedup · Statistics dashboard · **AI Geocode** (Groq / OpenAI / Ollama)
 
 ---
 
@@ -122,7 +134,7 @@ nano ~/pagermonitor/backend/.env
 sudo systemctl start pagermonitor
 ```
 
-Open `http://<pi-ip>:3000` · Login: **admin** / **admin123** · Change password immediately.
+Open `http://<pi-ip>:3000` · Login: **admin** / *see startup log for generated password* · Change password immediately.
 
 ### Docker (any machine)
 
@@ -204,9 +216,10 @@ Multiple RPi clients can connect to the same server.
 | Frontend | React 18, Vite, Leaflet (maps) |
 | Auth | bcrypt, Bearer token sessions |
 | Notifications | node-fetch, nodemailer, web-push (VAPID) |
+| AI geocoding | Groq API · OpenAI API · Ollama (local) — all optional |
 | Process | systemd (native) or Docker Compose |
 
-No external services required. Everything runs locally.
+No external services required by default. Everything runs locally. AI geocoding is optional — enable it for better address extraction without any impact on the core pipeline.
 
 ---
 

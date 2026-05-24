@@ -1,7 +1,8 @@
 'use strict';
 
-const { spawn } = require('child_process');
-const iconv     = require('iconv-lite');
+const { spawn }       = require('child_process');
+const { PassThrough } = require('stream');
+const iconv           = require('iconv-lite');
 const http      = require('http');
 const https     = require('https');
 
@@ -125,7 +126,7 @@ function httpRequest(method, path, body) {
     const req = lib.request({
       hostname: url.hostname,
       port:     url.port || (url.protocol === 'https:' ? 443 : 80),
-      path:     url.pathname,
+      path:     url.pathname + url.search,
       method, headers,
     }, res => {
       let raw = '';
@@ -160,7 +161,10 @@ let globalOverrideCfg   = null; // remote config overlay (applies to all dongles
 
 async function pollConfig(pipelines) {
   try {
-    const r = await httpRequest('GET', '/client/config');
+    const freqs      = pipelines.map(p => p.getCfg().freq).join(':');
+    const protocols  = [...new Set(pipelines.map(p => p.getCfg().protocols))].join(' ');
+    const sdrRunning = pipelines.every(p => p.isRunning());
+    const r = await httpRequest('GET', `/client/config?freq=${encodeURIComponent(freqs)}&protocols=${encodeURIComponent(protocols)}&sdrRunning=${sdrRunning}`);
     if (r.status !== 200 || !r.body?.config) return;
     const { config, version } = r.body;
     if (!config || version === globalConfigVersion) return;
@@ -184,12 +188,18 @@ function createPipeline(baseCfg, index) {
   let stopping = false;
   let restartTimer    = null;
   let consecutiveFails = 0;
+  let generation = 0;
+  let watchdogTimer   = null;
+  let pipelineRunning = false;
   const label = `[dongle-${cfg.device}]`;
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   function kill() {
-    try { if (mmonProc) { mmonProc.stdout?.unpipe(); mmonProc.kill('SIGTERM'); } } catch (_) {}
+    pipelineRunning = false;
+    clearInterval(watchdogTimer); watchdogTimer = null;
+    try { if (rtlProc) rtlProc.stdout?.unpipe(); } catch (_) {}
+    try { if (mmonProc) mmonProc.kill('SIGTERM'); } catch (_) {}
     try { if (rtlProc)  rtlProc.kill('SIGTERM'); } catch (_) {}
     rtlProc = null; mmonProc = null;
   }
@@ -197,9 +207,11 @@ function createPipeline(baseCfg, index) {
   async function start() {
     if (stopping) return;
     kill();
+    const myGen = ++generation;
 
     log('info', `${label} Waiting 3s before starting...`);
     await sleep(3000);
+    if (stopping || myGen !== generation) return;
 
     const rtlArgs  = buildRtlArgs(cfg);
     const mmonArgs = buildMmonArgs(cfg);
@@ -209,7 +221,25 @@ function createPipeline(baseCfg, index) {
       rtlProc  = spawn('rtl_fm',      rtlArgs,  { stdio: ['ignore', 'pipe', 'pipe'] });
       mmonProc = spawn('multimon-ng', mmonArgs, { stdio: ['pipe',   'pipe', 'pipe'] });
 
-      rtlProc.stdout.pipe(mmonProc.stdin);
+      const tap = new PassThrough();
+      let lastRtlMs = Date.now();
+      tap.on('data', () => {
+        lastRtlMs = Date.now();
+        if (!pipelineRunning) pipelineRunning = true;
+      });
+      tap.on('error', () => {});
+      rtlProc.stdout.pipe(tap);
+      tap.pipe(mmonProc.stdin);
+      rtlProc.stdout.on('error', () => {});
+      mmonProc.stdin.on('error',  () => {});
+      watchdogTimer = setInterval(() => {
+        if (stopping || myGen !== generation) { clearInterval(watchdogTimer); watchdogTimer = null; return; }
+        if (Date.now() - lastRtlMs > 20000) {
+          clearInterval(watchdogTimer); watchdogTimer = null;
+          log('warn', `${label} rtl_fm watchdog: no audio data for 20s — restarting`);
+          if (!stopping) scheduleRestart();
+        }
+      }, 10000);
 
       rtlProc.stderr.on('data', d =>
         d.toString().split('\n').forEach(l => { if (l.trim()) log('debug', `${label} rtl_fm: ${l.trim()}`); })
@@ -237,16 +267,18 @@ function createPipeline(baseCfg, index) {
       });
 
       const onExit = (src) => (code, sig) => {
+        if (myGen !== generation) return;
         log('info', `${label} ${src} exited (${code}/${sig})`);
+        pipelineRunning = false;
         if (!stopping) scheduleRestart();
       };
       rtlProc.on('exit',  onExit('rtl_fm'));
       mmonProc.on('exit', onExit('multimon-ng'));
-      rtlProc.on('error',  e => { log('error', `${label} rtl_fm error: ${e.message}`);  if (!stopping) scheduleRestart(); });
-      mmonProc.on('error', e => { log('error', `${label} mmon error: ${e.message}`);     if (!stopping) scheduleRestart(); });
+      rtlProc.on('error',  e => { if (myGen !== generation) return; log('error', `${label} rtl_fm error: ${e.message}`);  pipelineRunning = false; if (!stopping) scheduleRestart(); });
+      mmonProc.on('error', e => { if (myGen !== generation) return; log('error', `${label} mmon error: ${e.message}`);     pipelineRunning = false; if (!stopping) scheduleRestart(); });
 
       consecutiveFails = 0;
-      log('info', `${label} Pipeline running — freq=${cfg.freq} protocols=${cfg.protocols}`);
+      log('info', `${label} Pipeline spawned — waiting for audio data`);
     } catch (e) {
       log('error', `${label} Spawn failed: ${e.message}`);
       if (!stopping) scheduleRestart();
@@ -262,10 +294,15 @@ function createPipeline(baseCfg, index) {
   }
 
   function applyRemoteConfig(remote) {
-    const changed = Object.keys(remote).some(k => cfg[k] !== remote[k]);
+    // Rebuild from baseCfg so cleared remote fields revert to .env defaults
+    const newCfg = { ...baseCfg };
+    for (const [k, v] of Object.entries(remote)) {
+      if (v !== '' && v != null) newCfg[k] = v;
+    }
+    const changed = Object.keys(newCfg).some(k => newCfg[k] !== cfg[k]);
     if (!changed) return;
     log('info', `${label} Applying remote config — restarting`);
-    Object.assign(cfg, remote);
+    Object.assign(cfg, newCfg);
     clearTimeout(restartTimer);
     restartTimer = null;
     start();
@@ -277,7 +314,7 @@ function createPipeline(baseCfg, index) {
     kill();
   }
 
-  return { start, stop, applyRemoteConfig, label };
+  return { start, stop, applyRemoteConfig, getCfg: () => ({ ...cfg }), isRunning: () => pipelineRunning, label };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -305,7 +342,11 @@ const shutdown = () => {
   log('info', 'Shutting down...');
   clearInterval(configTimer);
   pipelines.forEach(p => p.stop());
-  process.exit(0);
+  // Notify server we're offline so it doesn't wait for the threshold to expire
+  httpRequest('POST', '/client/offline', {})
+    .catch(() => {})
+    .finally(() => process.exit(0));
+  setTimeout(() => process.exit(0), 3000); // safety exit if request hangs
 };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT',  shutdown);

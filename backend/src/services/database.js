@@ -14,6 +14,9 @@ function initDb() {
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
+  db.function('regexp', { deterministic: true }, (pattern, str) => {
+    try { return new RegExp(pattern, 'i').test(str ?? '') ? 1 : 0; } catch { return 0; }
+  });
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -176,14 +179,29 @@ function _migrate() {
     CREATE INDEX IF NOT EXISTS idx_notes_message ON message_notes(message_id);
 
     CREATE TABLE IF NOT EXISTS user_notif_prefs (
-      user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      enabled     INTEGER NOT NULL DEFAULT 0,
-      mode        TEXT    NOT NULL DEFAULT 'all',
-      group_ids   TEXT    NOT NULL DEFAULT '[]',
-      capcodes    TEXT    NOT NULL DEFAULT '[]',
-      keywords    TEXT    NOT NULL DEFAULT '[]'
+      user_id          INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      enabled          INTEGER NOT NULL DEFAULT 0,
+      mode             TEXT    NOT NULL DEFAULT 'all',
+      group_ids        TEXT    NOT NULL DEFAULT '[]',
+      capcodes         TEXT    NOT NULL DEFAULT '[]',
+      keywords         TEXT    NOT NULL DEFAULT '[]',
+      push_enabled     INTEGER NOT NULL DEFAULT 0,
+      push_mode        TEXT    NOT NULL DEFAULT 'all',
+      push_group_ids   TEXT    NOT NULL DEFAULT '[]',
+      push_capcodes    TEXT    NOT NULL DEFAULT '[]',
+      push_keywords    TEXT    NOT NULL DEFAULT '[]'
     )
   `);
+
+  const prefCols = db.prepare('PRAGMA table_info(user_notif_prefs)').all().map(c => c.name);
+  if (!prefCols.includes('push_enabled')) {
+    db.exec('ALTER TABLE user_notif_prefs ADD COLUMN push_enabled   INTEGER NOT NULL DEFAULT 0');
+    db.exec('ALTER TABLE user_notif_prefs ADD COLUMN push_mode      TEXT    NOT NULL DEFAULT \'all\'');
+    db.exec('ALTER TABLE user_notif_prefs ADD COLUMN push_group_ids TEXT    NOT NULL DEFAULT \'[]\'');
+    db.exec('ALTER TABLE user_notif_prefs ADD COLUMN push_capcodes  TEXT    NOT NULL DEFAULT \'[]\'');
+    db.exec('ALTER TABLE user_notif_prefs ADD COLUMN push_keywords  TEXT    NOT NULL DEFAULT \'[]\'');
+    logger.info('Migration: added push columns to user_notif_prefs');
+  }
 
   const msgColumns = db.prepare("PRAGMA table_info(messages)").all().map(c => c.name);
   if (!msgColumns.includes('lat')) {
@@ -261,7 +279,9 @@ function getHistory(limit = 200) {
 }
 
 function searchMessages(query, limit = 100) {
-  const safe = query.replace(/['"*]/g, '');
+  const safe  = query.replace(/['"*]/g, '').trim();
+  const terms = safe.split(/\s+/).filter(Boolean);
+  const ftsQuery = terms.map(t => `${t}*`).join(' ');
   return getDb().prepare(`
     SELECT m.*, a.name as alias_name, a.color as alias_color, a.row_color as alias_row_color, a.row_sound as alias_row_sound,
            g.id as group_id, g.name as group_name, g.color as group_color, g.row_color as group_row_color, g.row_sound as group_row_sound,
@@ -274,7 +294,7 @@ function searchMessages(query, limit = 100) {
     LEFT JOIN groups  pg ON pg.id = g.parent_id
     WHERE messages_fts MATCH ?
     ORDER BY m.id DESC LIMIT ?
-  `).all(`"\${safe}"`, limit);
+  `).all(ftsQuery, limit);
 }
 
 function getMessageStats() {
@@ -285,13 +305,14 @@ function getMessageStats() {
     GROUP BY hour ORDER BY hour ASC
   `).all();
   const daily = d.prepare(`
-    SELECT date(timestamp) as day, COUNT(*) as n
+    SELECT date(timestamp, 'localtime') as day, COUNT(*) as n
     FROM messages WHERE timestamp >= datetime('now', '-30 days')
     GROUP BY day ORDER BY day ASC
   `).all();
   const topCodes = d.prepare(`
-    SELECT capcode, COUNT(*) as n FROM messages
-    GROUP BY capcode ORDER BY n DESC LIMIT 10
+    SELECT m.capcode, COUNT(*) as n, a.name
+    FROM messages m LEFT JOIN aliases a ON a.capcode = m.capcode
+    GROUP BY m.capcode ORDER BY n DESC LIMIT 10
   `).all();
   const byProtocol = d.prepare(`
     SELECT protocol, COUNT(*) as n FROM messages
@@ -364,28 +385,45 @@ function updateUserEmail(id, email) { getDb().prepare('UPDATE users SET email=? 
 // Per-user notification preferences
 function getUserNotifPrefs(userId) {
   const row = getDb().prepare('SELECT * FROM user_notif_prefs WHERE user_id=?').get(userId);
-  if (!row) return { enabled:false, mode:'all', group_ids:[], capcodes:[], keywords:[] };
+  if (!row) return {
+    enabled: false, mode: 'all', group_ids: [], capcodes: [], keywords: [],
+    push_enabled: false, push_mode: 'all', push_group_ids: [], push_capcodes: [], push_keywords: [],
+  };
   return {
-    enabled:   !!row.enabled,
-    mode:      row.mode,
-    group_ids: JSON.parse(row.group_ids || '[]'),
-    capcodes:  JSON.parse(row.capcodes  || '[]'),
-    keywords:  JSON.parse(row.keywords  || '[]'),
+    enabled:        !!row.enabled,
+    mode:           row.mode,
+    group_ids:      JSON.parse(row.group_ids      || '[]'),
+    capcodes:       JSON.parse(row.capcodes       || '[]'),
+    keywords:       JSON.parse(row.keywords       || '[]'),
+    push_enabled:   !!row.push_enabled,
+    push_mode:      row.push_mode || 'all',
+    push_group_ids: JSON.parse(row.push_group_ids || '[]'),
+    push_capcodes:  JSON.parse(row.push_capcodes  || '[]'),
+    push_keywords:  JSON.parse(row.push_keywords  || '[]'),
   };
 }
 
 function setUserNotifPrefs(userId, prefs) {
   getDb().prepare(`
-    INSERT INTO user_notif_prefs (user_id, enabled, mode, group_ids, capcodes, keywords)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO user_notif_prefs
+      (user_id, enabled, mode, group_ids, capcodes, keywords,
+       push_enabled, push_mode, push_group_ids, push_capcodes, push_keywords)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       enabled=excluded.enabled, mode=excluded.mode,
-      group_ids=excluded.group_ids, capcodes=excluded.capcodes, keywords=excluded.keywords
+      group_ids=excluded.group_ids, capcodes=excluded.capcodes, keywords=excluded.keywords,
+      push_enabled=excluded.push_enabled, push_mode=excluded.push_mode,
+      push_group_ids=excluded.push_group_ids, push_capcodes=excluded.push_capcodes,
+      push_keywords=excluded.push_keywords
   `).run(userId,
     prefs.enabled ? 1 : 0, prefs.mode || 'all',
-    JSON.stringify(prefs.group_ids || []),
-    JSON.stringify(prefs.capcodes  || []),
-    JSON.stringify(prefs.keywords  || []),
+    JSON.stringify(prefs.group_ids      || []),
+    JSON.stringify(prefs.capcodes       || []),
+    JSON.stringify(prefs.keywords       || []),
+    prefs.push_enabled ? 1 : 0, prefs.push_mode || 'all',
+    JSON.stringify(prefs.push_group_ids || []),
+    JSON.stringify(prefs.push_capcodes  || []),
+    JSON.stringify(prefs.push_keywords  || []),
   );
 }
 
@@ -468,6 +506,12 @@ function addMessageNote(messageId, userId, username, note, isPrivate) {
   `).run(messageId, userId, username, note.trim(), isPrivate ? 1 : 0).lastInsertRowid;
 }
 
+function deleteMessage(id) {
+  const db = getDb();
+  db.prepare('DELETE FROM messages_fts WHERE rowid = ?').run(id);
+  db.prepare('DELETE FROM messages WHERE id = ?').run(id);
+}
+
 function deleteMessageNote(noteId, userId, userRole) {
   // Users can only delete their own notes; admins can delete any
   if (userRole === 'admin') {
@@ -494,7 +538,7 @@ function getStats() {
   const d = getDb();
   return {
     total:    d.prepare('SELECT COUNT(*) as n FROM messages').get().n,
-    today:    d.prepare("SELECT COUNT(*) as n FROM messages WHERE date(timestamp)=date('now')").get().n,
+    today:    d.prepare("SELECT COUNT(*) as n FROM messages WHERE date(timestamp,'localtime')=date('now','localtime')").get().n,
     lastHour: d.prepare("SELECT COUNT(*) as n FROM messages WHERE timestamp >= strftime('%Y-%m-%dT%H:%M:%SZ', datetime('now','-1 hour'))").get().n,
   };
 }
@@ -515,7 +559,7 @@ function pruneExpiredSessions() {
 
 module.exports = {
   initDb, getDb,
-  insertMessage, getHistory, searchMessages, getMessageStats,
+  insertMessage, getHistory, searchMessages, getMessageStats, deleteMessage,
   getGroups, createGroup, updateGroup, deleteGroup,
   getAliases, upsertAlias, deleteAlias, bulkUpsertAliases,
   getSetting, setSetting,

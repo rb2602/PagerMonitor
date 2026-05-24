@@ -14,18 +14,21 @@ function FeedHeader() {
   );
   return (
     <div className="feed-header" style={{ display:'flex', alignItems:'center', gap:'0.5rem',
-      padding:'0.28rem 0.75rem', background:'var(--bg-2)', borderBottom:'1px solid var(--border)',
+      padding:'0.28rem 0.75rem',
+      background:'color-mix(in srgb, var(--bg-2) 85%, transparent)',
+      backdropFilter:'blur(8px)', WebkitBackdropFilter:'blur(8px)',
+      borderBottom:'1px solid var(--border)', borderLeft:'3px solid transparent',
       position:'sticky', top:0, zIndex:2 }}>
       <span style={{ width:'12px', flexShrink:0 }} />
       {cell('Date / Time',   { flexShrink:0, minWidth:'62px', textAlign:'right' })}
-      {cell('Capcode',       { flexShrink:0, minWidth:'70px' })}
-      {cell('Alias / Group', { flexShrink:0, width: BADGE_COL_WIDTH })}
+      {cell('Capcode',       { flexShrink:0, minWidth:'70px', textAlign:'center' })}
+      {cell('Alias / Group', { flexShrink:0, width: BADGE_COL_WIDTH, textAlign:'center' })}
       {cell('Message',       { flex:1 })}
     </div>
   );
 }
 
-export default function MessageFeed({ messages, highlightRules = [], groups = [], onFilter, onMapClick, onLoadMore, loadingMore, noMoreMessages, totalInDb, totalLoaded }) {
+export default function MessageFeed({ messages, highlightRules = [], groups = [], onFilter, onMapClick, onLoadMore, loadingMore, noMoreMessages, totalInDb, totalLoaded, onDelete }) {
   const { newBadgeSeconds = 10 } = useSite();
 
   // lastSeenId from the server — tracks per-user across all devices
@@ -100,11 +103,13 @@ export default function MessageFeed({ messages, highlightRules = [], groups = []
         return (
           <MessageRow key={msgId || i}
             msg={msg}
+            index={i}
             isNew={isNew}
             highlightRules={highlightRules}
             groups={groups}
             onFilter={onFilter}
-            onMapClick={onMapClick} />
+            onMapClick={onMapClick}
+            onDelete={onDelete} />
         );
       })}
 
@@ -123,7 +128,10 @@ export default function MessageFeed({ messages, highlightRules = [], groups = []
         </div>
       )}
 
-      <style>{`@media(max-width:600px){.feed-header{display:none!important}}`}</style>
+      <style>{`
+        @media(max-width:600px){.feed-header{display:none!important}}
+        @keyframes new-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
+      `}</style>
     </div>
   );
 }

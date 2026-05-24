@@ -78,22 +78,27 @@ function getNotifConfig() {
 function saveNotifConfig(cfg) { setSetting('notif_config', cfg); logger.info('Notification config saved'); }
 
 // ── Notification filter ───────────────────────────────────────────────────────
-// mode: 'all' | 'filtered'
-// capcodes: array of capcode strings to include (when mode='filtered')
-const NOTIF_FILTER_DEFAULTS = { mode: 'all', capcodes: [] };
+// Applies to: Discord, Telegram, Gotify, Pushover, MQTT only.
+// mode: 'all' | 'groups' | 'aliases' | 'capcodes' | 'keywords'
+const NOTIF_FILTER_MODES = ['all', 'groups', 'aliases', 'capcodes', 'keywords'];
+const NOTIF_FILTER_DEFAULTS = { mode: 'all', group_ids: [], capcodes: [], keywords: [] };
 
 function getNotifFilter() {
   const raw = getSetting('notif_filter', null);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...NOTIF_FILTER_DEFAULTS };
   return {
-    mode:     ['all','filtered'].includes(raw.mode) ? raw.mode : 'all',
-    capcodes: Array.isArray(raw.capcodes) ? raw.capcodes : [],
+    mode:      NOTIF_FILTER_MODES.includes(raw.mode) ? raw.mode : 'all',
+    group_ids: Array.isArray(raw.group_ids) ? raw.group_ids.map(Number) : [],
+    capcodes:  Array.isArray(raw.capcodes)  ? raw.capcodes  : [],
+    keywords:  Array.isArray(raw.keywords)  ? raw.keywords  : [],
   };
 }
 function saveNotifFilter(cfg) {
   setSetting('notif_filter', {
-    mode:     ['all','filtered'].includes(cfg.mode) ? cfg.mode : 'all',
-    capcodes: Array.isArray(cfg.capcodes) ? cfg.capcodes.map(String) : [],
+    mode:      NOTIF_FILTER_MODES.includes(cfg.mode) ? cfg.mode : 'all',
+    group_ids: Array.isArray(cfg.group_ids) ? cfg.group_ids.map(Number) : [],
+    capcodes:  Array.isArray(cfg.capcodes)  ? cfg.capcodes.map(String)  : [],
+    keywords:  Array.isArray(cfg.keywords)  ? cfg.keywords.map(String)  : [],
   });
   logger.info('Notification filter saved');
 }
