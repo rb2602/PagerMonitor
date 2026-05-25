@@ -22,7 +22,6 @@ import DeadAirConfig  from './DeadAirConfig.jsx';
 import Webhooks       from './Webhooks.jsx';
 import StatsDashboard from './StatsDashboard.jsx';
 import AuditLog       from './AuditLog.jsx';
-import ActivityFeed   from './ActivityFeed.jsx';
 import BackupRestore  from './BackupRestore.jsx';
 import EmailConfig      from './EmailConfig.jsx';
 import UserNotifPrefs  from './UserNotifPrefs.jsx';
@@ -61,7 +60,6 @@ const TABS = [
   { group: 'System' },
   { id:'system',      label:'System',          icon:<Server size={14}/> },
   { id:'update',      label:'Update',          icon:<RefreshCw size={14}/> },
-  { id:'activity',    label:'Activity',         icon:<Activity size={14}/> },
   { id:'backup',      label:'Backup & Restore', icon:<HardDrive size={14}/> },
   { id:'auditlog',    label:'Audit Log',        icon:<ClipboardList size={14}/> },
 
@@ -93,7 +91,6 @@ function TabContent({ tab, sdrStatus, serverStatus, onRulesChange, onGroupsChang
     case 'client':      return <ClientSettings />;
     case 'sdrclients':  return <SdrClients />;
     case 'users':       return <UsersPanel />;
-    case 'activity':    return <ActivityFeed limit={50} />;
     case 'backup':      return <BackupRestore />;
     case 'auditlog':    return <AuditLog />;
     case 'archive':     return <ArchiveConfig />;
