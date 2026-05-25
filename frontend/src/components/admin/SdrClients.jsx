@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Wifi, WifiOff, Trash2, RefreshCw, Activity, Settings2, ChevronDown, ChevronUp, Save } from 'lucide-react';
+import { Wifi, WifiOff, Trash2, RefreshCw, Activity, Settings2, ChevronDown, ChevronUp, Save, Download } from 'lucide-react';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
@@ -45,14 +45,15 @@ function Flash({ msg }) {
   }}>{msg.text}</div>;
 }
 
-function ClientCard({ client, configs, onRemove, onSaveConfig, flash }) {
+function ClientCard({ client, configs, onRemove, onSaveConfig, onSendCommand, flash }) {
   const [expanded, setExpanded] = useState(false);
   const existingCfg = configs.find(c => c.clientId === client.id);
   const [form, setForm] = useState(existingCfg?.config || {});
   const [saving, setSaving] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [cfgMsg, setCfgMsg] = useState(null);
 
-  const flashCfg = (type, text) => { setCfgMsg({type,text}); setTimeout(()=>setCfgMsg(null),3500); };
+  const flashCfg = (type, text) => { setCfgMsg({type,text}); setTimeout(()=>setCfgMsg(null),4000); };
 
   const save = async () => {
     setSaving(true);
@@ -61,6 +62,16 @@ function ClientCard({ client, configs, onRemove, onSaveConfig, flash }) {
       flashCfg('ok', `Config saved (v${r.version}) — client will pick up in ≤60s`);
     } catch (e) { flashCfg('err', e.message); }
     finally { setSaving(false); }
+  };
+
+  const sendUpdate = async () => {
+    if (!confirm(`Send remote update command to "${client.id}"?\n\nThis will run update.sh on the client (git pull + npm install + service restart). The client will update within 60 seconds.`)) return;
+    setUpdating(true);
+    try {
+      await onSendCommand(client.id, 'update');
+      flashCfg('ok', '✓ Update queued — client will run update.sh within 60s');
+    } catch (e) { flashCfg('err', e.message); }
+    finally { setUpdating(false); }
   };
 
   return (
@@ -87,6 +98,11 @@ function ClientCard({ client, configs, onRemove, onSaveConfig, flash }) {
 
         <button className="pm-btn" onClick={() => setExpanded(e => !e)} title="Remote config">
           <Settings2 size={12}/> Config {expanded ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
+        </button>
+        <button className="pm-btn" onClick={sendUpdate} disabled={updating}
+          title="Send remote update command — runs update.sh on the client"
+          style={{ color: client.pendingCommand === 'update' ? 'var(--accent-amber)' : undefined }}>
+          <Download size={12}/> {updating ? 'Queuing…' : client.pendingCommand === 'update' ? 'Update pending…' : 'Update'}
         </button>
         <button className="pm-btn pm-btn-danger" onClick={() => onRemove(client.id)} title="Remove">
           <Trash2 size={12}/>
@@ -126,6 +142,9 @@ function ClientCard({ client, configs, onRemove, onSaveConfig, flash }) {
         </div>
       )}
 
+      {/* Inline feedback — shown for both update and config actions */}
+      {cfgMsg && <div style={{ marginTop:'0.5rem' }}><Flash msg={cfgMsg}/></div>}
+
       {/* Remote config panel */}
       {expanded && (
         <div style={{ marginTop:'0.75rem', paddingTop:'0.75rem', borderTop:'1px solid var(--border-soft)' }}>
@@ -133,7 +152,6 @@ function ClientCard({ client, configs, onRemove, onSaveConfig, flash }) {
           <p style={{ fontSize:'0.75rem', color:'var(--text-3)', marginBottom:'0.75rem', lineHeight:1.5 }}>
             Set below to override the Pi's local .env settings. The client polls every 60 seconds and restarts the SDR pipeline automatically if the config changes. Leave fields empty to keep the Pi's local .env value.
           </p>
-          <Flash msg={cfgMsg}/>
           {existingCfg?.version && (
             <div style={{ fontSize:'0.7rem', color:'var(--text-3)', fontFamily:'monospace', marginBottom:'0.5rem' }}>
               Config version: <span style={{ color:'var(--accent-blue)' }}>{existingCfg.version}</span>
@@ -200,6 +218,13 @@ export default function SdrClients() {
     return r;
   };
 
+  const sendCommand = async (id, command) => {
+    const r = await api('POST', `/admin/sdr-clients/${encodeURIComponent(id)}/command`, { command });
+    if (!r.ok) throw new Error(r.error || 'Command failed');
+    load(); // refresh to show pending state
+    return r;
+  };
+
   return (
     <div style={{ maxWidth:'720px' }}>
       <h2 style={{ fontSize:'1rem', fontWeight:700, color:'var(--text-1)', marginBottom:'0.5rem',
@@ -225,7 +250,7 @@ export default function SdrClients() {
 
       {!loading && clients.map(c => (
         <ClientCard key={c.id} client={c} configs={configs}
-          onRemove={remove} onSaveConfig={saveConfig} flash={flash} />
+          onRemove={remove} onSaveConfig={saveConfig} onSendCommand={sendCommand} flash={flash} />
       ))}
 
       <div style={{ fontSize:'0.72rem', color:'var(--text-3)', fontFamily:'monospace', marginTop:'0.75rem' }}>

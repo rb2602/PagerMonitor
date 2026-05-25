@@ -19,7 +19,7 @@ const { sendWebhooks }          = require('../services/webhooks');
 const { sendUserEmailNotifications } = require('../services/emailNotifier');
 const { sendPushPerUser }       = require('../services/webpush');
 const { recordMessage }         = require('../services/deadair');
-const { recordClientMessage, recordClientPing, recordClientOffline, getClientConfig } = require('../services/clientTracker');
+const { recordClientMessage, recordClientPing, recordClientOffline, getClientConfig, popPendingCommand } = require('../services/clientTracker');
 const { getDedupConfig, passesFeedFilter } = require('../services/config');
 const logger                    = require('../utils/logger');
 
@@ -186,10 +186,12 @@ router.get('/config', requireClientKey, (req, res) => {
     sdrRunning: req.query.sdrRunning === 'true' ? true : req.query.sdrRunning === 'false' ? false : null,
   });
 
-  const cfg = getClientConfig(clientId);
-  if (!cfg) return res.json({ config: null, version: null }); // no config set yet
+  const cfg     = getClientConfig(clientId);
+  const command = popPendingCommand(clientId); // one-shot — cleared after this read
 
-  res.json(cfg);
+  if (!cfg) return res.json({ config: null, version: null, command: command || null });
+
+  res.json({ ...cfg, command: command || null });
 });
 
 module.exports = router;

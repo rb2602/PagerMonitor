@@ -447,7 +447,7 @@ router.get('/stats', adminOnly, (_req,res) => {
 });
 
 // ── SDR Clients dashboard ─────────────────────────────────────────────────────
-const { getClients, resetClient, getAllClientConfigs, saveClientConfig } = require('../services/clientTracker');
+const { getClients, resetClient, getAllClientConfigs, saveClientConfig, setPendingCommand } = require('../services/clientTracker');
 
 router.get('/sdr-clients', adminOnly, (_req, res) => {
   try { res.json(getClients()); }
@@ -471,6 +471,18 @@ router.put('/sdr-clients/:id/config', adminOnly, (req, res) => {
     res.json({ ok: true, version });
   }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /admin/sdr-clients/:id/command — queue a remote command (e.g. 'update')
+router.post('/sdr-clients/:id/command', adminOnly, (req, res) => {
+  try {
+    const { command } = req.body;
+    if (!command) return res.status(400).json({ error: 'command required' });
+    const id = decodeURIComponent(req.params.id);
+    setPendingCommand(id, command);
+    addAuditLog(req.session?.username || 'admin', 'client.command', `id=${id} cmd=${command}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Email config ──────────────────────────────────────────────────────────────

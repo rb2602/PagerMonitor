@@ -5,6 +5,8 @@ const { PassThrough } = require('stream');
 const iconv           = require('iconv-lite');
 const http      = require('http');
 const https     = require('https');
+const path      = require('path');
+const fs        = require('fs');
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const SERVER_URL = (process.env.SERVER_URL || 'http://192.168.1.100:3000').replace(/\/$/, '');
@@ -165,7 +167,12 @@ async function pollConfig(pipelines) {
     const protocols  = [...new Set(pipelines.map(p => p.getCfg().protocols))].join(' ');
     const sdrRunning = pipelines.every(p => p.isRunning());
     const r = await httpRequest('GET', `/client/config?freq=${encodeURIComponent(freqs)}&protocols=${encodeURIComponent(protocols)}&sdrRunning=${sdrRunning}`);
-    if (r.status !== 200 || !r.body?.config) return;
+    if (r.status !== 200 || !r.body) return;
+
+    // Handle remote command (one-shot — server clears it after delivery)
+    if (r.body.command) handleRemoteCommand(r.body.command);
+
+    if (!r.body.config) return;
     const { config, version } = r.body;
     if (!config || version === globalConfigVersion) return;
 
@@ -178,6 +185,52 @@ async function pollConfig(pipelines) {
   } catch (e) {
     log('debug', `Config poll failed: ${e.message}`);
   }
+}
+
+// ── Remote command handler ────────────────────────────────────────────────────
+function handleRemoteCommand(command) {
+  log('info', `Remote command received: ${command}`);
+  if (command === 'update') {
+    runUpdateScript();
+  } else {
+    log('warn', `Unknown remote command: ${command} — ignoring`);
+  }
+}
+
+function runUpdateScript() {
+  // update.sh lives at the repo root — two levels up from src/
+  // (repo root → client/ → src/)
+  const scriptPath = path.join(__dirname, '..', '..', 'update.sh');
+
+  if (!fs.existsSync(scriptPath)) {
+    log('warn', `update.sh not found at ${scriptPath} — cannot run remote update`);
+    return;
+  }
+
+  log('info', `Launching remote update: bash ${scriptPath}`);
+
+  // Spawn detached so the script survives the service restart it triggers
+  const child = spawn('bash', [scriptPath], {
+    cwd:      path.join(__dirname, '..', '..'), // repo root
+    detached: true,
+    stdio:    ['ignore', 'pipe', 'pipe'],
+    env:      { ...process.env, TERM: 'dumb', NO_COLOR: '1' },
+  });
+
+  child.stdout.on('data', d =>
+    d.toString().split('\n').forEach(l => { if (l.trim()) log('info', `[update] ${l.trim()}`); })
+  );
+  child.stderr.on('data', d =>
+    d.toString().split('\n').forEach(l => { if (l.trim()) log('warn', `[update] ${l.trim()}`); })
+  );
+  child.on('error', err => log('error', `[update] spawn error: ${err.message}`));
+  child.on('close', code => {
+    // We may never reach this if the service is restarted mid-update — that's expected
+    if (code !== null && code !== 0) log('warn', `[update] script exited with code ${code}`);
+  });
+
+  // Unref so Node's event loop doesn't wait for the child
+  child.unref();
 }
 
 // ── Single dongle pipeline ────────────────────────────────────────────────────

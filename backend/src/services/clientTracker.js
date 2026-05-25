@@ -32,13 +32,14 @@ function ensureTables() {
   // Migrate: add new columns if missing
   const cols = db.prepare("PRAGMA table_info(sdr_clients)").all().map(c => c.name);
   for (const [col, def] of [
-    ['messages_today',  'INTEGER NOT NULL DEFAULT 0'],
-    ['today_date',      "TEXT NOT NULL DEFAULT (date('now'))"],
-    ['freq',            'TEXT'],
-    ['protocols',       'TEXT'],
-    ['last_message',    'TEXT'],
-    ['last_message_ts', 'TEXT'],
-    ['sdr_running',     'INTEGER'],
+    ['messages_today',   'INTEGER NOT NULL DEFAULT 0'],
+    ['today_date',       "TEXT NOT NULL DEFAULT (date('now'))"],
+    ['freq',             'TEXT'],
+    ['protocols',        'TEXT'],
+    ['last_message',     'TEXT'],
+    ['last_message_ts',  'TEXT'],
+    ['sdr_running',      'INTEGER'],
+    ['pending_command',  'TEXT'],
   ]) {
     if (!cols.includes(col)) {
       db.exec(`ALTER TABLE sdr_clients ADD COLUMN ${col} ${def}`);
@@ -107,19 +108,20 @@ function getClients() {
       const tsStr  = r.last_seen?.includes('T') ? r.last_seen : (r.last_seen || '').replace(' ', 'T') + 'Z';
       const lastMs = new Date(tsStr).getTime();
       return {
-        id:             r.id,
-        firstSeen:      r.first_seen,
-        lastSeen:       r.last_seen,
-        messageCount:   r.message_count,
-        messagesToday:  r.messages_today || 0,
-        ip:             r.ip || null,
-        freq:           r.freq || null,
-        protocols:      r.protocols || null,
-        lastMessage:    r.last_message || null,
-        lastMessageTs:  r.last_message_ts || null,
-        online:         (now - lastMs) < 90 * 1000,
-        silentSec:      Math.round((now - lastMs) / 1000),
-        sdrRunning:     r.sdr_running == null ? null : r.sdr_running === 1,
+        id:              r.id,
+        firstSeen:       r.first_seen,
+        lastSeen:        r.last_seen,
+        messageCount:    r.message_count,
+        messagesToday:   r.messages_today || 0,
+        ip:              r.ip || null,
+        freq:            r.freq || null,
+        protocols:       r.protocols || null,
+        lastMessage:     r.last_message || null,
+        lastMessageTs:   r.last_message_ts || null,
+        online:          (now - lastMs) < 90 * 1000,
+        silentSec:       Math.round((now - lastMs) / 1000),
+        sdrRunning:      r.sdr_running == null ? null : r.sdr_running === 1,
+        pendingCommand:  r.pending_command || null,
       };
     });
   } catch (e) {
@@ -197,8 +199,36 @@ function saveClientConfig(clientId, config) {
   }
 }
 
+// ── Pending commands (remote update, etc.) ────────────────────────────────────
+function setPendingCommand(clientId, command) {
+  if (!clientId) return;
+  try {
+    ensureTables();
+    getDb().prepare('UPDATE sdr_clients SET pending_command = ? WHERE id = ?').run(command, clientId);
+  } catch (e) {
+    logger.warn(`clientTracker.setPendingCommand: ${e.message}`);
+  }
+}
+
+/** Atomically read + clear the pending command — returns null if none. */
+function popPendingCommand(clientId) {
+  if (!clientId) return null;
+  try {
+    ensureTables();
+    const db  = getDb();
+    const row = db.prepare('SELECT pending_command FROM sdr_clients WHERE id = ?').get(clientId);
+    if (!row || !row.pending_command) return null;
+    db.prepare('UPDATE sdr_clients SET pending_command = NULL WHERE id = ?').run(clientId);
+    return row.pending_command;
+  } catch (e) {
+    logger.warn(`clientTracker.popPendingCommand: ${e.message}`);
+    return null;
+  }
+}
+
 module.exports = {
   recordClientMessage, recordClientPing, recordClientOffline,
   getClients, resetClient,
   getClientConfig, getAllClientConfigs, saveClientConfig,
+  setPendingCommand, popPendingCommand,
 };
