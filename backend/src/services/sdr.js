@@ -452,30 +452,32 @@ function handleLine(line) {
     parent_group_row_color:   parentGroupRowColor,
     parent_group_row_sound:   parentGroupRowSound,
   };
+  // Feed filter — drop the message entirely (not saved to DB, no notifications)
+  if (!passesFeedFilter(msg)) {
+    logger.debug(`[feed-filter] dropped ${msg.capcode}`);
+    return;
+  }
+
   const id      = insertMessage(msg);
   const payload = { type: 'message', id, ...msg };
 
-  // Apply feed filter — message is always saved to DB, but only broadcast if it passes
-  const feedVisible = passesFeedFilter(msg);
-  if (feedVisible) broadcast(payload);
+  broadcast(payload);
   recordMessage();
   sdrStatus.lastMessage = timestamp;
 
-  // Check keyword alerts (only for visible messages)
-  if (feedVisible) {
-    try {
-      const alerts  = getKeywordAlerts().filter(a => a.enabled);
-      const matched = alerts.filter(a => {
-        try {
-          const re = a.is_regex
-            ? new RegExp(a.pattern, 'i')
-            : new RegExp(a.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-          return re.test(msg.message || '') || re.test(msg.capcode || '');
-        } catch { return false; }
-      });
-      if (matched.length) broadcast({ ...payload, type: 'keyword_alert', matchedAlerts: matched });
-    } catch (_) {}
-  }
+  // Keyword alerts
+  try {
+    const alerts  = getKeywordAlerts().filter(a => a.enabled);
+    const matched = alerts.filter(a => {
+      try {
+        const re = a.is_regex
+          ? new RegExp(a.pattern, 'i')
+          : new RegExp(a.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        return re.test(msg.message || '') || re.test(msg.capcode || '');
+      } catch { return false; }
+    });
+    if (matched.length) broadcast({ ...payload, type: 'keyword_alert', matchedAlerts: matched });
+  } catch (_) {}
 
   // Geocode address first if no explicit coords, so notifications include a map link
   ;(async () => {

@@ -5,11 +5,11 @@ import { useAdminFetch } from '../../hooks/useAdminFetch.js';
 import { adminFetchAliases, adminFetchGroups } from '../../utils/api.js';
 
 const MODES = [
-  { id: 'show_all',        label: 'Show all',            desc: 'No filtering — all messages appear in the feed.' },
-  { id: 'ignore_capcodes', label: 'Ignore capcodes',     desc: 'Hide messages from specific capcodes. Everything else is shown.' },
-  { id: 'only_capcodes',   label: 'Only capcodes',       desc: 'Show only messages from the listed capcodes.' },
-  { id: 'only_groups',     label: 'Only groups',         desc: 'Show only messages whose alias belongs to one of the selected groups.' },
-  { id: 'only_aliases',    label: 'Only aliased',        desc: 'Show only messages from capcodes that have an alias. Optionally restrict to specific aliases.' },
+  { id: 'show_all',        label: 'Accept all',          desc: 'No filtering — all received messages are processed normally.' },
+  { id: 'ignore_capcodes', label: 'Ignore capcodes',     desc: 'Drop messages from specific capcodes. All other messages are processed normally.' },
+  { id: 'only_capcodes',   label: 'Only capcodes',       desc: 'Only process messages from the listed capcodes. Everything else is dropped.' },
+  { id: 'only_groups',     label: 'Only groups',         desc: 'Only process messages whose alias belongs to one of the selected groups. Everything else is dropped.' },
+  { id: 'only_aliases',    label: 'Only aliased',        desc: 'Only process messages from capcodes that have an alias. Unaliased capcodes are dropped. Optionally restrict to specific aliases.' },
 ];
 
 const DEFAULTS = { mode: 'show_all', capcodes: [], group_ids: [] };
@@ -66,9 +66,8 @@ export default function FeedFilter() {
       </h2>
 
       <p style={{ fontSize: '0.82rem', color: 'var(--text-3)', marginBottom: '1rem', lineHeight: 1.6 }}>
-        Controls which messages appear in the <strong style={{ color: 'var(--text-2)' }}>live feed and message history</strong>.
-        Filtered messages are <em>still saved</em> to the database — they're just hidden from the feed.
-        Notifications follow their own separate filter.
+        Controls which messages are processed. Filtered messages are <strong style={{ color: 'var(--accent-red, #f87171)' }}>completely ignored</strong> —
+        not saved to the database, not shown in the feed or archive, and no notifications are sent.
       </p>
 
       {isFiltering && (
@@ -79,7 +78,7 @@ export default function FeedFilter() {
           border: '1px solid color-mix(in srgb, var(--accent-yellow, #f59e0b) 30%, transparent)',
           color: 'var(--accent-yellow, #f59e0b)',
         }}>
-          ⚠ Feed filter is active — some messages are hidden from the feed.
+          ⚠ Feed filter is active — some messages are being completely ignored (not saved, no notifications).
         </div>
       )}
 
@@ -140,8 +139,8 @@ export default function FeedFilter() {
             style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '0.8rem' }} />
           <div style={{ fontSize: '0.73rem', color: 'var(--text-3)', marginTop: '0.4rem' }}>
             {safe.capcodes.length > 0
-              ? `${safe.capcodes.length} capcode(s) will be hidden from the feed.`
-              : 'No capcodes entered — all messages will be shown.'}
+              ? `${safe.capcodes.length} capcode(s) will be dropped. All others are processed normally.`
+              : 'No capcodes entered — all messages will be processed.'}
           </div>
         </div>
       )}
@@ -149,7 +148,7 @@ export default function FeedFilter() {
       {/* Only capcodes — whitelist textarea */}
       {safe.mode === 'only_capcodes' && (
         <div className="pm-card" style={{ marginBottom: '1rem' }}>
-          <div className="pm-section-title">Capcodes to show (one per line or comma-separated)</div>
+          <div className="pm-section-title">Capcodes to accept (one per line or comma-separated)</div>
           <textarea className="pm-input" rows={5}
             value={safe.capcodes.join('\n')}
             onChange={e => setFilter(f => ({ ...sanitise(f), capcodes: setListField(e.target.value) }))}
@@ -157,8 +156,8 @@ export default function FeedFilter() {
             style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '0.8rem' }} />
           <div style={{ fontSize: '0.73rem', color: 'var(--text-3)', marginTop: '0.4rem' }}>
             {safe.capcodes.length > 0
-              ? `Only messages from these ${safe.capcodes.length} capcode(s) will be shown.`
-              : 'No capcodes entered — nothing will be shown.'}
+              ? `Only messages from these ${safe.capcodes.length} capcode(s) will be processed. Everything else is dropped.`
+              : 'No capcodes entered — all messages will be dropped.'}
           </div>
         </div>
       )}
@@ -167,7 +166,7 @@ export default function FeedFilter() {
       {safe.mode === 'only_groups' && (
         <div className="pm-card" style={{ marginBottom: '1rem' }}>
           <div className="pm-section-title">
-            Groups to show ({safe.group_ids.length} selected)
+            Groups to accept ({safe.group_ids.length} selected)
           </div>
           {loadingGroups
             ? <div style={{ color: 'var(--text-3)', fontSize: '0.82rem' }}>Loading groups…</div>
@@ -206,7 +205,7 @@ export default function FeedFilter() {
           }
           {safe.group_ids.length === 0 && groups.length > 0 && (
             <div style={{ fontSize: '0.73rem', color: 'var(--accent-red, #f87171)', marginTop: '0.5rem' }}>
-              No groups selected — nothing will be shown until you pick at least one.
+              No groups selected — all messages will be dropped until you pick at least one.
             </div>
           )}
         </div>
@@ -216,9 +215,9 @@ export default function FeedFilter() {
       {safe.mode === 'only_aliases' && (
         <div className="pm-card" style={{ marginBottom: '1rem' }}>
           <div className="pm-section-title">
-            Specific aliases to show
+            Specific aliases to accept
             <span style={{ fontWeight: 400, color: 'var(--text-3)', marginLeft: '0.4rem' }}>
-              (leave empty to show <em>all</em> aliased capcodes)
+              (leave empty to accept <em>all</em> aliased capcodes)
             </span>
           </div>
           {loadingAliases
@@ -264,8 +263,8 @@ export default function FeedFilter() {
                   </div>
                   <div style={{ fontSize: '0.73rem', color: 'var(--text-3)' }}>
                     {safe.capcodes.length === 0
-                      ? `All ${aliases.length} aliased capcode(s) will be shown. Unaliased capcodes are hidden.`
-                      : `Only ${safe.capcodes.length} of ${aliases.length} aliased capcode(s) selected.`}
+                      ? `All ${aliases.length} aliased capcode(s) will be accepted. Unaliased capcodes are dropped.`
+                      : `Only ${safe.capcodes.length} of ${aliases.length} aliased capcode(s) will be accepted. Everything else is dropped.`}
                   </div>
                 </>
               )

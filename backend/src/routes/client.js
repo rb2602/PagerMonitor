@@ -107,30 +107,32 @@ router.post('/message', requireClientKey, (req, res) => {
       parent_group_name:  parentGroupName,
       parent_group_color: parentGroupColor,
     };
+    // Feed filter — drop the message entirely (not saved to DB, no notifications)
+    if (!passesFeedFilter(msg)) {
+      logger.debug(`[feed-filter] dropped ${capcode}`);
+      return res.json({ ok: true, filtered: true });
+    }
+
     const id      = insertMessage(msg);
     const payload = { type: 'message', id, ...msg };
 
-    // Apply feed filter — message is always saved to DB, but only broadcast if it passes
-    const feedVisible = passesFeedFilter(msg);
-    if (feedVisible) broadcast(payload);
+    broadcast(payload);
     recordMessage();
     recordClientMessage(clientId, req.ip, { message, freq, protocols });
 
-    // Keyword alerts (only for visible messages)
-    if (feedVisible) {
-      try {
-        const alerts  = getKeywordAlerts().filter(a => a.enabled);
-        const matched = alerts.filter(a => {
-          try {
-            const re = a.is_regex
-              ? new RegExp(a.pattern, 'i')
-              : new RegExp(a.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-            return re.test(msg.message || '') || re.test(msg.capcode || '');
-          } catch { return false; }
-        });
-        if (matched.length) broadcast({ ...payload, type: 'keyword_alert', matchedAlerts: matched });
-      } catch (_) {}
-    }
+    // Keyword alerts
+    try {
+      const alerts  = getKeywordAlerts().filter(a => a.enabled);
+      const matched = alerts.filter(a => {
+        try {
+          const re = a.is_regex
+            ? new RegExp(a.pattern, 'i')
+            : new RegExp(a.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+          return re.test(msg.message || '') || re.test(msg.capcode || '');
+        } catch { return false; }
+      });
+      if (matched.length) broadcast({ ...payload, type: 'keyword_alert', matchedAlerts: matched });
+    } catch (_) {}
 
     // Geocode address first if no explicit coords, so notifications include a map link
     ;(async () => {
