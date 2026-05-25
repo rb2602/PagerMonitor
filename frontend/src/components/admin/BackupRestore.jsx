@@ -68,18 +68,23 @@ export default function BackupRestore() {
   const restartServer = async () => {
     if (!confirm('⚠️ Restart the server now?\n\nThe server will go offline briefly while it restarts. Under Docker it will come back up automatically.')) return;
     setRestarting(true);
+    // Use a short timeout — if the server closes the connection mid-restart
+    // the fetch may never resolve/reject, so we abort after 2s.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2000);
     try {
       await fetch(`${BASE}/admin/backup/restart`, {
         method: 'POST',
         headers: { Authorization:`Bearer ${tok()}` },
+        signal: ctrl.signal,
       });
-      flash('ok', '✓ Restart signal sent. The server will be back in a few seconds…');
     } catch (_) {
-      // The server likely dropped the connection while restarting — that's expected
-      flash('ok', '✓ Restart signal sent. The server will be back in a few seconds…');
+      // AbortError or network drop when server exits — both are expected
     } finally {
-      setRestarting(false);
+      clearTimeout(timer);
     }
+    flash('ok', '✓ Restart signal sent. The server will be back in a few seconds…');
+    setRestarting(false);
   };
 
   const restore = async (file) => {

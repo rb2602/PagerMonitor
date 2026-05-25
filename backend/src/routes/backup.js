@@ -192,8 +192,8 @@ router.post('/restart', requireAdmin, (req, res) => {
   addAuditLog(req.session.username, 'server.restart', 'manual restart via admin panel');
   logger.warn(`Server restart requested by ${req.session.username}`);
   res.json({ ok: true, message: 'Restarting server…' });
-  // Give the response time to flush before exiting
-  setTimeout(() => process.exit(0), 500);
+  // Wait for the HTTP response to fully flush before exiting
+  res.on('finish', () => setTimeout(() => process.exit(0), 100));
 });
 
 module.exports = router;
