@@ -48,11 +48,27 @@ export default function ClientSettings() {
     finally { setSaving(false); }
   };
 
-  const copy = () => {
-    navigator.clipboard.writeText(key).then(() => {
+  const copy = async () => {
+    try {
+      // Preferred: Clipboard API (requires HTTPS / secure context)
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(key);
+      } else {
+        // Fallback: works over plain HTTP (e.g. local network access on mobile)
+        const el = document.createElement('textarea');
+        el.value = key;
+        el.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    } catch (_) {
+      // Copy failed — nothing we can do silently
+    }
   };
 
   const serverUrl = window.location.origin;

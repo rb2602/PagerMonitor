@@ -388,7 +388,7 @@ export default function SiteSettings() {
           </label>
           <div style={{ fontSize:'0.72rem', color:'var(--text-3)', marginTop:'0.5rem', marginLeft:'1.4rem', lineHeight:1.6 }}>
             When enabled: the live feed, map, and search are visible without login.
-            Admin panel, user management, and notification settings remain protected.
+            Settings panel, user management, and notification settings remain protected.
             Visitors see a <span style={{ color:'var(--accent-blue)' }}>Log in</span> button to access full features.
           </div>
         </div>

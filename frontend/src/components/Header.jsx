@@ -95,7 +95,7 @@ export default function Header({ wsStatus, soundEnabled, onToggleSound, browserN
             <NavBtn active={view==='map'}     onClick={() => nav('map')}     icon={<Map size={13}/>}     label="Map" />
             <NavBtn active={view==='archive'} onClick={() => nav('archive')} icon={<Archive size={13}/>} label="Archive" />
             {!isGuest && (user?.role === 'admin' || user?.role === 'editor') && (
-              <NavBtn active={view==='admin'} onClick={() => nav('admin')} icon={<Settings size={13}/>} label="Admin" />
+              <NavBtn active={view==='admin'} onClick={() => nav('admin')} icon={<Settings size={13}/>} label="Settings" />
             )}
 
             {/* Sound + browser notifications + theme */}
@@ -195,7 +195,7 @@ export default function Header({ wsStatus, soundEnabled, onToggleSound, browserN
             <MenuRow icon={<Map size={16}/>}     label="Map"     active={view==='map'}     onClick={() => nav('map')} />
             <MenuRow icon={<Archive size={16}/>} label="Archive" active={view==='archive'} onClick={() => nav('archive')} />
             {!isGuest && (user?.role === 'admin' || user?.role === 'editor') && (
-              <MenuRow icon={<Settings size={16}/>} label="Admin" active={view==='admin'} onClick={() => nav('admin')} />
+              <MenuRow icon={<Settings size={16}/>} label="Settings" active={view==='admin'} onClick={() => nav('admin')} />
             )}
             <div style={{ height:'1px', background:'var(--border-soft)' }} />
             <MenuRow icon={soundEnabled ? <Volume2 size={16}/> : <VolumeX size={16}/>}
