@@ -95,7 +95,10 @@ export default function SdrControl({ sdrStatus }) {
       setConfig(cfg && typeof cfg === 'object' ? cfg : {});
       const arr = Array.isArray(d) && d.length > 0 ? d : [];
       setDongles(arr);
-      setMultiMode(arr.length > 1);
+      const isMulti = arr.length > 1;
+      setMultiMode(isMulti);
+      // Collapse default single-dongle settings when multi-dongle mode is already active
+      if (isMulti) setOpen(FIELD_GROUPS.reduce((acc, _, gi) => ({ ...acc, [gi]: false }), {}));
     }).catch(e => setMsg({ type:'err', text: e.message }))
       .finally(() => setLoading(false));
   };
@@ -198,14 +201,36 @@ export default function SdrControl({ sdrStatus }) {
         )}
       </div>
 
-      {/* Command preview */}
-      {sdrStatus?.rtlArgs && (
+      {/* Command preview — single dongle */}
+      {!multiMode && sdrStatus?.rtlArgs?.length > 0 && (
         <div className="pm-card" style={{ marginBottom: '1rem' }}>
           <div className="pm-section-title">Active command</div>
           <div style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'var(--text-2)',
             background: 'var(--bg-3)', padding: '0.5rem 0.75rem', borderRadius: '0.4rem',
             overflowX: 'auto', whiteSpace: 'nowrap' }}>
-            rtl_fm {sdrStatus.rtlArgs?.join(' ')} | multimon-ng {sdrStatus.mmonArgs?.join(' ')}
+            rtl_fm {sdrStatus.rtlArgs.join(' ')} | multimon-ng {sdrStatus.mmonArgs?.join(' ')}
+          </div>
+        </div>
+      )}
+
+      {/* Command preview — multi dongle (one line per dongle) */}
+      {multiMode && sdrStatus?.dongleStatuses?.length > 0 && sdrStatus.dongleStatuses.some(d => d.rtlArgs) && (
+        <div className="pm-card" style={{ marginBottom: '1rem' }}>
+          <div className="pm-section-title">Active commands</div>
+          <div style={{ display: 'grid', gap: '0.5rem' }}>
+            {sdrStatus.dongleStatuses.map((d, i) => d.rtlArgs && (
+              <div key={i}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 600, fontFamily: 'monospace',
+                  color: 'var(--accent-blue)', marginBottom: '0.2rem' }}>
+                  dongle-{d.device} ({d.freq})
+                </div>
+                <div style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'var(--text-2)',
+                  background: 'var(--bg-3)', padding: '0.4rem 0.75rem', borderRadius: '0.4rem',
+                  overflowX: 'auto', whiteSpace: 'nowrap' }}>
+                  rtl_fm {d.rtlArgs.join(' ')} | multimon-ng {d.mmonArgs?.join(' ')}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -221,8 +246,21 @@ export default function SdrControl({ sdrStatus }) {
                 onClick={() => setOpen(o => ({ ...o, [gi]: !o[gi] }))}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
               >
-                <div className="pm-section-title" style={{ color: group.color, marginBottom: 0 }}>
-                  {group.title}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div className="pm-section-title" style={{ color: group.color, marginBottom: 0 }}>
+                    {group.title}
+                  </div>
+                  {multiMode && !open[gi] && (
+                    <span style={{
+                      fontSize: '0.65rem', fontFamily: 'monospace',
+                      color: 'var(--accent-amber)',
+                      background: 'color-mix(in srgb, var(--accent-amber) 12%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--accent-amber) 25%, transparent)',
+                      padding: '0.1rem 0.4rem', borderRadius: '0.3rem',
+                    }}>
+                      not used in multi-dongle mode
+                    </span>
+                  )}
                 </div>
                 {open[gi] ? <ChevronUp size={14} style={{ color: 'var(--text-3)' }} /> : <ChevronDown size={14} style={{ color: 'var(--text-3)' }} />}
               </button>
@@ -252,8 +290,12 @@ export default function SdrControl({ sdrStatus }) {
               cursor:'pointer', color:'var(--text-1)', marginBottom:'0.5rem' }}>
               <input type="checkbox" checked={multiMode}
                 onChange={e => {
-                  setMultiMode(e.target.checked);
-                  if (e.target.checked && dongles.length < 2) {
+                  const checked = e.target.checked;
+                  setMultiMode(checked);
+                  // Collapse default settings when multi-dongle is enabled (they are ignored),
+                  // expand them again when switching back to single mode.
+                  setOpen(FIELD_GROUPS.reduce((acc, _, gi) => ({ ...acc, [gi]: !checked }), {}));
+                  if (checked && dongles.length < 2) {
                     setDongles([
                       { ...DONGLE_DEFAULTS, device:'0', freq: config.RTL_FM_FREQ || '173.250M' },
                       { ...DONGLE_DEFAULTS, device:'1', freq: '152.240M' },

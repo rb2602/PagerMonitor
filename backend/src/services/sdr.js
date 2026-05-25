@@ -193,12 +193,15 @@ async function startSdrPipeline() {
     sdrStatus.running     = false;
     sdrStatus.startedAt   = new Date().toISOString();
     sdrStatus.error       = null;
+    sdrStatus.rtlArgs     = null;   // not applicable in multi-dongle mode
+    sdrStatus.mmonArgs    = null;
     sdrStatus.freq        = dongles.map(d => d.freq).join(', ');
     sdrStatus.protocols   = dongles.map(d => d.protocols || process.env.MULTIMON_PROTOCOLS || '');
     sdrStatus.dongleCount = dongles.length;
     sdrStatus.dongleStatuses = donglePipelines.map(p => ({
       device: p.cfg.device, freq: p.cfg.freq, protocols: p.cfg.protocols, label: p.label,
       running: false, error: null, lastMessage: null,
+      rtlArgs: p.rtlArgs, mmonArgs: p.mmonArgs,
     }));
     broadcast({ type: 'sdr_status', status: getStatus() });
     consecutiveFails = 0;
@@ -602,7 +605,7 @@ function spawnDonglePipeline(dongle, label, myGen) {
   rtl.on('error',  e => { if (myGen !== generation) return; logger.error(`${label} rtl_fm: ${e.message}`);  if (!stopping) onFail('rtl_fm',  e.message); });
   mmon.on('error', e => { if (myGen !== generation) return; logger.error(`${label} mmon: ${e.message}`);     if (!stopping) onFail('mmon',    e.message); });
 
-  return { rtlProc: rtl, mmonProc: mmon, cfg: dongle, label, state, watchdog };
+  return { rtlProc: rtl, mmonProc: mmon, cfg: dongle, label, state, watchdog, rtlArgs, mmonArgs };
 }
 
 function broadcastDongleStatus() {
@@ -613,6 +616,8 @@ function broadcastDongleStatus() {
     running:     p.state.running,
     error:       p.state.error,
     lastMessage: p.state.lastMessage,
+    rtlArgs:     p.rtlArgs,
+    mmonArgs:    p.mmonArgs,
   }));
   const allOk = dongles.every(d => d.running);
   sdrStatus.dongleStatuses = dongles;
