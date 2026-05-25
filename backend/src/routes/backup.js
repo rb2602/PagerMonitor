@@ -186,14 +186,17 @@ router.post('/restore', requireAdmin, async (req, res) => {
 });
 
 // ── POST /admin/backup/restart ─────────────────────────────────────────────────
-// Gracefully restarts the server process. Under Docker (restart: unless-stopped)
-// or PM2, the process manager will bring it back up automatically.
+// Gracefully restarts the server by sending SIGTERM to itself.
+// The SIGTERM handler in index.js broadcasts 'server_shutdown' to all WS clients
+// (so the UI shows "restarting" instead of "error"), closes the HTTP server, then exits.
+// Under Docker (restart: unless-stopped) or systemd the process manager brings it back up.
 router.post('/restart', requireAdmin, (req, res) => {
   addAuditLog(req.session.username, 'server.restart', 'manual restart via admin panel');
   logger.warn(`Server restart requested by ${req.session.username}`);
   res.json({ ok: true, message: 'Restarting server…' });
-  // Wait for the HTTP response to fully flush before exiting
-  res.on('finish', () => setTimeout(() => process.exit(0), 100));
+  // Send SIGTERM after the HTTP response has fully flushed —
+  // the graceful shutdown handler will broadcast server_shutdown to all WS clients
+  res.on('finish', () => process.kill(process.pid, 'SIGTERM'));
 });
 
 module.exports = router;

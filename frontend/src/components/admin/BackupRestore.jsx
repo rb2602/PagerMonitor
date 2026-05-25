@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Download, Upload, RefreshCw, HardDrive, AlertTriangle, CheckCircle, Power } from 'lucide-react';
+import { Download, Upload, RefreshCw, HardDrive, AlertTriangle, CheckCircle, Power, Loader } from 'lucide-react';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
@@ -33,12 +33,12 @@ function StatusCard({ label, info }) {
 }
 
 export default function BackupRestore() {
-  const [status, setStatus]       = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [restoring, setRestoring] = useState(false);
-  const [restarting, setRestarting] = useState(false);
-  const [msg, setMsg]             = useState(null);
-  const fileRef                   = useRef(null);
+  const [status, setStatus]           = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [restoring, setRestoring]     = useState(false);
+  const [restartPhase, setRestartPhase] = useState('idle'); // idle | waiting | polling
+  const [msg, setMsg]                 = useState(null);
+  const fileRef                       = useRef(null);
 
   const flash = (type, text) => { setMsg({type, text}); setTimeout(() => setMsg(null), 6000); };
 
@@ -65,13 +65,26 @@ export default function BackupRestore() {
     } catch (e) { flash('err', e.message); }
   };
 
+  // Poll /health until the server comes back up, then reload
+  useEffect(() => {
+    if (restartPhase !== 'polling') return;
+    let tries = 0;
+    const poll = setInterval(async () => {
+      tries++;
+      try {
+        const r = await fetch(`${BASE}/health`);
+        if (r.ok) { clearInterval(poll); window.location.reload(); }
+      } catch (_) {}
+      if (tries > 60) { clearInterval(poll); setRestartPhase('idle'); flash('err', 'Server did not come back up in time — check logs.'); }
+    }, 2000);
+    return () => clearInterval(poll);
+  }, [restartPhase]);
+
   const restartServer = async () => {
-    if (!confirm('⚠️ Restart the server now?\n\nThe server will go offline briefly while it restarts. Under Docker it will come back up automatically.')) return;
-    setRestarting(true);
-    // Use a short timeout — if the server closes the connection mid-restart
-    // the fetch may never resolve/reject, so we abort after 2s.
+    if (!confirm('⚠️ Restart the server now?\n\nThe server will go offline briefly while it restarts. The page will reload automatically when it comes back up.')) return;
+    setRestartPhase('waiting');
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 2000);
+    const timer = setTimeout(() => ctrl.abort(), 3000);
     try {
       await fetch(`${BASE}/admin/backup/restart`, {
         method: 'POST',
@@ -79,12 +92,11 @@ export default function BackupRestore() {
         signal: ctrl.signal,
       });
     } catch (_) {
-      // AbortError or network drop when server exits — both are expected
+      // Network drop or abort when server exits — both are expected
     } finally {
       clearTimeout(timer);
     }
-    flash('ok', '✓ Restart signal sent. The server will be back in a few seconds…');
-    setRestarting(false);
+    setRestartPhase('polling');
   };
 
   const restore = async (file) => {
@@ -202,22 +214,32 @@ export default function BackupRestore() {
           style={{ display:'none' }} />
 
         <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap', alignItems:'center' }}>
-          <button className="pm-btn" onClick={() => fileRef.current?.click()} disabled={restoring}
+          <button className="pm-btn" onClick={() => fileRef.current?.click()}
+            disabled={restoring || restartPhase !== 'idle'}
             style={{ display:'flex', alignItems:'center', gap:'0.4rem' }}>
             {restoring
               ? <><RefreshCw size={13} style={{ animation:'spin 1s linear infinite' }}/> Restoring…</>
               : <><Upload size={13}/> Choose .pmbackup file to restore</>}
           </button>
 
-          <button className="pm-btn" onClick={restartServer} disabled={restarting || restoring}
+          <button className="pm-btn" onClick={restartServer}
+            disabled={restoring || restartPhase !== 'idle'}
             style={{ display:'flex', alignItems:'center', gap:'0.4rem',
               color:'var(--accent-amber)',
               borderColor:'color-mix(in srgb, var(--accent-amber) 40%, var(--border))' }}>
-            {restarting
-              ? <><RefreshCw size={13} style={{ animation:'spin 1s linear infinite' }}/> Restarting…</>
-              : <><Power size={13}/> Restart Server</>}
+            <Power size={13}/> Restart Server
           </button>
         </div>
+
+        {restartPhase !== 'idle' && (
+          <div style={{ display:'flex', alignItems:'center', gap:'0.5rem',
+            marginTop:'0.75rem', fontSize:'0.82rem', color:'var(--accent-amber)' }}>
+            <Loader size={13} style={{ animation:'spin 1s linear infinite', flexShrink:0 }}/>
+            {restartPhase === 'waiting'
+              ? 'Sending restart signal…'
+              : 'Server restarting — page will reload automatically…'}
+          </div>
+        )}
       </div>
 
       {/* Info */}
