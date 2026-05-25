@@ -33,10 +33,10 @@ import FeedFilter     from './FeedFilter.jsx';
 const TABS = [
   { group: 'SDR' },
   { id:'sdr',         label:'SDR Control',    icon:<Cpu size={14}/>,        sdrOnly: true },
-  { id:'deadair',     label:'Dead Air',       icon:<Radio size={14}/> },
   { id:'logs',        label:'Live Logs',      icon:<Terminal size={14}/>,   sdrOnly: true },
   { id:'sdrclients',  label:'SDR Clients',    icon:<Activity size={14}/>,   serverOnly: true },
   { id:'client',      label:'Client Key',     icon:<Wifi size={14}/>,       serverOnly: true },
+  { id:'deadair',     label:'Dead Air',       icon:<Radio size={14}/> },
 
   { group: 'Messages' },
   { id:'db',          label:'Database',       icon:<Database size={14}/> },
@@ -161,7 +161,7 @@ export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onG
         }}>
           <div style={{ padding:'0 0.5rem 0.5rem', fontSize:'0.6rem', fontWeight:700,
             textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--text-3)' }}>
-            Admin
+            Settings
           </div>
           {visibleTabs.map((t, i) => t.group ? (
             <div key={`g-${i}`} style={{

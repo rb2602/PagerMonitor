@@ -16,13 +16,13 @@ const api  = (m, p, b) => fetch(`${BASE}${p}`, {
 }).then(r => r.json());
 
 const CFG_FIELDS = [
-  { key:'freq',           label:'Frequency',      placeholder:'173.250M', hint:'Use : to scan multiple: 173.250M:152.240M',               group:'rtl' },
-  { key:'modulation',     label:'Modulation',     placeholder:'fm',       hint:'fm | am | usb | lsb | wbfm | raw',                        group:'rtl' },
-  { key:'sampleRate',     label:'Sample rate',    placeholder:'22050',    hint:'Hz — 22050 recommended for POCSAG',                       group:'rtl' },
-  { key:'gain',           label:'Gain (dB)',       placeholder:'40',       hint:'0 = auto AGC, 40 = typical',                             group:'rtl' },
-  { key:'device',         label:'Device index',   placeholder:'0',        hint:'0 = first dongle, 1 = second, …',                        group:'rtl' },
-  { key:'ppm',            label:'PPM',             placeholder:'0',        hint:'Frequency correction (run rtl_test -p)',                  group:'rtl' },
-  { key:'squelch',        label:'Squelch',         placeholder:'0',        hint:'0 = disabled',                                           group:'rtl' },
+  { key:'freq',           label:'Frequency (-f)',      placeholder:'173.250M', hint:'Use : to scan multiple: 173.250M:152.240M',         group:'rtl' },
+  { key:'modulation',     label:'Modulation (-M)',     placeholder:'fm',       hint:'fm | am | usb | lsb | wbfm | raw',                  group:'rtl' },
+  { key:'sampleRate',     label:'Sample rate (-s)',    placeholder:'22050',    hint:'Hz — 22050 recommended for POCSAG',                 group:'rtl' },
+  { key:'gain',           label:'Gain (-g)',           placeholder:'40',       hint:'dB — 0 = auto AGC, 40 = typical',                  group:'rtl' },
+  { key:'device',         label:'Device index (-d)',   placeholder:'0',        hint:'0 = first dongle, 1 = second, …',                  group:'rtl' },
+  { key:'ppm',            label:'PPM (-p)',            placeholder:'0',        hint:'Frequency correction (run rtl_test -p)',             group:'rtl' },
+  { key:'squelch',        label:'Squelch (-l)',        placeholder:'0',        hint:'0 = disabled',                                      group:'rtl' },
   { key:'resampleRate',   label:'Resample rate (-r)',   placeholder:'',         hint:'Hz — leave empty to skip',                               group:'rtl' },
   { key:'lowpass',        label:'Post-process (-E)',    placeholder:'',         hint:'dc | deemp | edge | direct | offset (leave empty to disable)', group:'rtl' },
   { key:'tunerBandwidth', label:'Tuner bandwidth (-T)', placeholder:'',         hint:'Hz — 0 = auto, leave empty to skip',                     group:'rtl' },
