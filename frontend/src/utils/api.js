@@ -22,7 +22,8 @@ async function req(method, path, body, isAdmin = false) {
 export const fetchHistory  = (limit = 200, before = 0) => req('GET', `/api/history?limit=${limit}${before ? `&before=${before}` : ''}`);
 export const fetchSearch   = (q, limit = 100) => req('GET', `/api/search?q=${encodeURIComponent(q)}&limit=${limit}`);
 export const fetchStatus   = () => req('GET', '/api/status');
-export const fetchAliases  = () => req('GET', '/api/aliases');
+export const fetchAliases    = () => req('GET', '/api/aliases');
+export const fetchFeedFilter = () => req('GET', '/api/feed-filter');
 export const fetchGroups   = () => req('GET', '/api/groups');
 export const fetchRules    = () => req('GET', '/api/rules');
 export const saveAlias     = (capcode, body) => req('PUT',    `/api/aliases/${capcode}`, body);
@@ -38,6 +39,7 @@ export const adminFetchSdrLogs      = () => A('GET', '/admin/sdr/logs');
 export const adminFetchDbStats      = () => A('GET', '/admin/db/stats');
 export const adminFetchNotifConfig  = () => A('GET', '/admin/notifications/config');
 export const adminFetchNotifFilter  = () => A('GET', '/admin/notifications/filter');
+export const adminFetchFeedFilter   = () => A('GET', '/admin/feed-filter');
 export const adminFetchDedup        = () => A('GET', '/admin/dedup');
 export const adminFetchRules        = () => A('GET', '/admin/rules');
 export const adminFetchGroups       = () => A('GET', '/admin/groups');
@@ -51,6 +53,7 @@ export const adminPurgeDb         = days => A('DELETE', `/admin/db/purge?days=${
 export const adminPurgeAll        = ()   => A('DELETE', '/admin/db/purge/all');
 export const adminSetNotifConfig  = cfg  => A('PUT', '/admin/notifications/config', cfg);
 export const adminSaveNotifFilter = cfg  => A('PUT', '/admin/notifications/filter', cfg);
+export const adminSaveFeedFilter  = cfg  => A('PUT', '/admin/feed-filter', cfg);
 export const adminTestNotif       = svc  => A('POST', `/admin/notifications/test/${svc}`);
 export const adminSaveDedup       = cfg  => A('PUT', '/admin/dedup', cfg);
 export const adminSaveRule        = rule => A('PUT', '/admin/rules', rule);

@@ -8,12 +8,16 @@ const { getStatus }      = require('../services/sdr');
 const { getClientCount } = require('../services/websocket');
 const { requireAuth, requireEditor } = require('../services/auth');
 const { getPublicKey, saveSubscription, removeSubscription } = require('../services/webpush');
+const { getFeedFilter, passesFeedFilter } = require('../services/config');
 
 router.get('/history', requireAuth, (req, res) => {
   const limit  = Math.min(parseInt(req.query.limit || '200', 10), 1000);
   const before = parseInt(req.query.before || '0', 10); // load messages older than this id
   try {
     const db   = require('../services/database').getDb();
+    // Fetch a larger batch then filter so we return close to `limit` rows even with aggressive filters.
+    // Max over-fetch is capped at 2× limit to avoid scanning the whole table on empty filters.
+    const fetchLimit = limit * 2;
     const rows = before > 0
       ? db.prepare(`
           SELECT m.*, a.name as alias_name, a.color as alias_color, a.row_color as alias_row_color, a.row_sound as alias_row_sound,
@@ -26,9 +30,19 @@ router.get('/history', requireAuth, (req, res) => {
           LEFT JOIN groups  pg ON pg.id = g.parent_id
           WHERE m.id < ?
           ORDER BY m.id DESC LIMIT ?
-        `).all(before, limit)
-      : require('../services/database').getHistory(limit);
-    res.json(rows);
+        `).all(before, fetchLimit)
+      : db.prepare(`
+          SELECT m.*, a.name as alias_name, a.color as alias_color, a.row_color as alias_row_color, a.row_sound as alias_row_sound,
+                 g.id as group_id, g.name as group_name, g.color as group_color, g.row_color as group_row_color, g.row_sound as group_row_sound,
+                 pg.name as parent_group_name, pg.color as parent_group_color, pg.row_color as parent_group_row_color, pg.row_sound as parent_group_row_sound,
+                 (SELECT COUNT(*) FROM message_notes n WHERE n.message_id = m.id AND n.is_private = 0) as note_count
+          FROM messages m
+          LEFT JOIN aliases a  ON a.capcode = m.capcode
+          LEFT JOIN groups  g  ON g.id = a.group_id
+          LEFT JOIN groups  pg ON pg.id = g.parent_id
+          ORDER BY m.id DESC LIMIT ?
+        `).all(fetchLimit);
+    res.json(rows.filter(r => passesFeedFilter(r)).slice(0, limit));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -68,6 +82,11 @@ router.delete('/aliases/:capcode', requireEditor, (req, res) => { deleteAlias(re
 
 router.get('/groups', requireAuth, (_req, res) => { try { res.json(getGroups()); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.get('/rules',  requireAuth, (_req, res) => { try { res.json(getHighlightRules()); } catch (e) { res.status(500).json({ error: e.message }); } });
+
+// Feed filter — exposed so clients know when a filter is active (mode only, no sensitive data)
+router.get('/feed-filter', requireAuth, (_req, res) => {
+  try { res.json(getFeedFilter()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // Messages with coordinates for the map view
 router.get('/map', requireAuth, (req, res) => {
@@ -118,16 +137,41 @@ router.post('/last-seen', requireAuth, (req, res) => {
 });
 
 // ── Archive ───────────────────────────────────────────────────────────────────
+
+// Build a capcode→group_id map from current aliases (used when feed filter is 'only_groups')
+function buildGroupMap() {
+  try {
+    return Object.fromEntries(
+      getDb().prepare(`
+        SELECT a.capcode, g.id as group_id, pg.id as parent_group_id
+        FROM aliases a
+        LEFT JOIN groups g  ON g.id = a.group_id
+        LEFT JOIN groups pg ON pg.id = g.parent_id
+        WHERE a.group_id IS NOT NULL
+      `).all().map(r => [r.capcode, r.group_id])
+    );
+  } catch (_) { return {}; }
+}
+
+// Enrich archive rows with group_id for filter compatibility, then apply feed filter
+function filterArchiveRows(rows) {
+  const filter = getFeedFilter();
+  if (!filter || filter.mode === 'show_all') return rows;
+  // For 'only_groups' mode archive rows need a live group lookup (not stored in archive)
+  const groupMap = filter.mode === 'only_groups' ? buildGroupMap() : null;
+  return rows.filter(r => {
+    const enriched = groupMap ? { ...r, group_id: groupMap[r.capcode] ?? null } : r;
+    return passesFeedFilter(enriched);
+  });
+}
+
 router.get('/archive', requireAuth, (req, res) => {
   try {
-    const { searchArchive, getArchiveHistory, getArchiveStats } = require('../services/archive');
+    const { searchArchive, getArchiveHistory } = require('../services/archive');
     const q     = (req.query.q || '').trim();
     const limit = Math.min(parseInt(req.query.limit || '200', 10), 1000);
-    if (q) {
-      res.json(searchArchive(q, limit));
-    } else {
-      res.json(getArchiveHistory(limit));
-    }
+    const rows  = q ? searchArchive(q, limit * 2) : getArchiveHistory(limit * 2);
+    res.json(filterArchiveRows(rows).slice(0, limit));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -175,7 +219,7 @@ router.get('/archive/export', requireAuth, (req, res) => {
   try {
     const { getArchiveHistory, searchArchive } = require('../services/archive');
     const q    = (req.query.q || '').trim();
-    const rows = q ? searchArchive(q, 10000) : getArchiveHistory(10000);
+    const rows = filterArchiveRows(q ? searchArchive(q, 10000) : getArchiveHistory(10000));
 
     const escape = v => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`;
     const header = ['id','timestamp','capcode','alias','protocol','baud','funcbits','message','lat','lng'];

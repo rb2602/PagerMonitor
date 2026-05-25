@@ -18,7 +18,8 @@ const { getDb, getStats, getMessageStats,
         getSetting: _gs, setSetting: _ss } = require('../services/database');
 const { getConfig, updateConfig, testNotification } = require('../services/notifications');
 const { getSdrConfig, saveSdrConfig, getDedupConfig, saveDedupConfig,
-        getNotifFilter, saveNotifFilter, getDongleConfigs, saveDongleConfigs } = require('../services/config');
+        getNotifFilter, saveNotifFilter, getDongleConfigs, saveDongleConfigs,
+        getFeedFilter, saveFeedFilter } = require('../services/config');
 const { getClientCount } = require('../services/websocket');
 const logger = require('../utils/logger');
 
@@ -199,6 +200,16 @@ router.get('/notifications/filter', adminOnly, (_req, res) => res.json(getNotifF
 router.put('/notifications/filter', adminOnly, (req, res) => {
   try { saveNotifFilter(req.body); addAuditLog(req.session?.username||'admin', 'notif.filter', null); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Feed filter ───────────────────────────────────────────────────────────────
+router.get('/feed-filter', adminOnly, (_req, res) => res.json(getFeedFilter()));
+router.put('/feed-filter', adminOnly, (req, res) => {
+  try {
+    saveFeedFilter(req.body);
+    addAuditLog(req.session?.username||'admin', 'feed_filter.save', `mode=${req.body.mode}`);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Dedup ─────────────────────────────────────────────────────────────────────

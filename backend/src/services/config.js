@@ -122,10 +122,63 @@ function saveDedupConfig(cfg) {
   logger.info('Dedup config saved');
 }
 
+// ── Feed filter ───────────────────────────────────────────────────────────────
+// Controls which messages are broadcast to the live feed and returned in history.
+// mode: 'show_all' | 'ignore_capcodes' | 'only_capcodes' | 'only_groups' | 'only_aliases'
+const FEED_FILTER_MODES    = ['show_all', 'ignore_capcodes', 'only_capcodes', 'only_groups', 'only_aliases'];
+const FEED_FILTER_DEFAULTS = { mode: 'show_all', capcodes: [], group_ids: [] };
+
+function getFeedFilter() {
+  const raw = getSetting('feed_filter', null);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...FEED_FILTER_DEFAULTS };
+  return {
+    mode:      FEED_FILTER_MODES.includes(raw.mode) ? raw.mode : 'show_all',
+    capcodes:  Array.isArray(raw.capcodes)  ? raw.capcodes.map(String)  : [],
+    group_ids: Array.isArray(raw.group_ids) ? raw.group_ids.map(Number) : [],
+  };
+}
+
+function saveFeedFilter(cfg) {
+  setSetting('feed_filter', {
+    mode:      FEED_FILTER_MODES.includes(cfg.mode) ? cfg.mode : 'show_all',
+    capcodes:  Array.isArray(cfg.capcodes)  ? cfg.capcodes.map(String)   : [],
+    group_ids: Array.isArray(cfg.group_ids) ? cfg.group_ids.map(Number)  : [],
+  });
+  logger.info('Feed filter saved');
+}
+
+// Returns true if the message should be shown in the feed.
+// msg must have: capcode, alias_name/alias, group_id
+function passesFeedFilter(msg) {
+  try {
+    const filter = getFeedFilter();
+    if (!filter || filter.mode === 'show_all') return true;
+
+    if (filter.mode === 'ignore_capcodes') {
+      return !filter.capcodes.includes(String(msg.capcode));
+    }
+    if (filter.mode === 'only_capcodes') {
+      return filter.capcodes.includes(String(msg.capcode));
+    }
+    if (filter.mode === 'only_groups') {
+      return msg.group_id != null && filter.group_ids.includes(Number(msg.group_id));
+    }
+    if (filter.mode === 'only_aliases') {
+      const hasAlias = !!(msg.alias_name || msg.alias);
+      if (!hasAlias) return false;
+      // If specific capcodes listed — require capcode to be in that list too
+      if (filter.capcodes.length > 0) return filter.capcodes.includes(String(msg.capcode));
+      return true;
+    }
+    return true;
+  } catch (_) { return true; }
+}
+
 module.exports = {
   getSdrConfig, saveSdrConfig, loadSdrConfigIntoEnv,
   getDongleConfigs, saveDongleConfigs,
   getNotifConfig, saveNotifConfig,
   getNotifFilter, saveNotifFilter,
   getDedupConfig, saveDedupConfig,
+  getFeedFilter, saveFeedFilter, passesFeedFilter,
 };

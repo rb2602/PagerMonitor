@@ -20,7 +20,7 @@ const { sendUserEmailNotifications } = require('../services/emailNotifier');
 const { sendPushPerUser }       = require('../services/webpush');
 const { recordMessage }         = require('../services/deadair');
 const { recordClientMessage, recordClientPing, recordClientOffline, getClientConfig } = require('../services/clientTracker');
-const { getDedupConfig }        = require('../services/config');
+const { getDedupConfig, passesFeedFilter } = require('../services/config');
 const logger                    = require('../utils/logger');
 
 // Dedup cache (same logic as sdr.js but for remote messages)
@@ -110,23 +110,27 @@ router.post('/message', requireClientKey, (req, res) => {
     const id      = insertMessage(msg);
     const payload = { type: 'message', id, ...msg };
 
-    broadcast(payload);
+    // Apply feed filter — message is always saved to DB, but only broadcast if it passes
+    const feedVisible = passesFeedFilter(msg);
+    if (feedVisible) broadcast(payload);
     recordMessage();
     recordClientMessage(clientId, req.ip, { message, freq, protocols });
 
-    // Keyword alerts
-    try {
-      const alerts  = getKeywordAlerts().filter(a => a.enabled);
-      const matched = alerts.filter(a => {
-        try {
-          const re = a.is_regex
-            ? new RegExp(a.pattern, 'i')
-            : new RegExp(a.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-          return re.test(msg.message || '') || re.test(msg.capcode || '');
-        } catch { return false; }
-      });
-      if (matched.length) broadcast({ ...payload, type: 'keyword_alert', matchedAlerts: matched });
-    } catch (_) {}
+    // Keyword alerts (only for visible messages)
+    if (feedVisible) {
+      try {
+        const alerts  = getKeywordAlerts().filter(a => a.enabled);
+        const matched = alerts.filter(a => {
+          try {
+            const re = a.is_regex
+              ? new RegExp(a.pattern, 'i')
+              : new RegExp(a.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            return re.test(msg.message || '') || re.test(msg.capcode || '');
+          } catch { return false; }
+        });
+        if (matched.length) broadcast({ ...payload, type: 'keyword_alert', matchedAlerts: matched });
+      } catch (_) {}
+    }
 
     // Geocode address first if no explicit coords, so notifications include a map link
     ;(async () => {
