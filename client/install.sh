@@ -127,6 +127,21 @@ SVCEOF
 sudo systemctl daemon-reload
 sudo systemctl enable pagermonitor-client
 
+# sudoers — allow service user to restart client without password prompt
+# (required for remote update triggered from the server admin panel)
+echo ""
+echo "► Configuring sudoers for remote updates…"
+SUDOERS_LINE="$USER ALL=(ALL) NOPASSWD: /bin/systemctl, /usr/bin/systemctl"
+echo "$SUDOERS_LINE" | sudo tee /tmp/pm-client-sudoers-check > /dev/null
+if sudo visudo -c -f /tmp/pm-client-sudoers-check 2>/dev/null; then
+  sudo cp /tmp/pm-client-sudoers-check /etc/sudoers.d/pagermonitor-client
+  sudo chmod 440 /etc/sudoers.d/pagermonitor-client
+  echo "  ✓ Done"
+else
+  echo "  ⚠ Sudoers validation failed — remote update restart will require manual sudo"
+fi
+sudo rm -f /tmp/pm-client-sudoers-check
+
 echo ""
 echo "═══════════════════════════════════════"
 echo "  Done! Next steps:"
