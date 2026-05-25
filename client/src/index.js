@@ -24,15 +24,23 @@ const CLIENT_ID  = process.env.CLIENT_ID   || 'rpi-1';
  */
 function buildDongleConfigs() {
   const global = {
-    freq:       process.env.RTL_FM_FREQ                || '173.250M',
-    gain:       process.env.RTL_FM_GAIN                || '40',
-    ppm:        process.env.RTL_FM_PPM                 || '0',
-    squelch:    process.env.RTL_FM_SQUELCH             || '0',
-    modulation: process.env.RTL_FM_MODULATION          || 'fm',
-    sampleRate: process.env.RTL_FM_SAMPLE_RATE         || '22050',
-    protocols:  process.env.MULTIMON_PROTOCOLS         || 'POCSAG1200',
-    quiet:      process.env.MULTIMON_QUIET             || '1',
-    charset:    process.env.MULTIMON_POCSAG_CHARSET    || '',
+    freq:           process.env.RTL_FM_FREQ                || '173.250M',
+    modulation:     process.env.RTL_FM_MODULATION          || 'fm',
+    sampleRate:     process.env.RTL_FM_SAMPLE_RATE         || '22050',
+    gain:           process.env.RTL_FM_GAIN                || '40',
+    ppm:            process.env.RTL_FM_PPM                 || '0',
+    squelch:        process.env.RTL_FM_SQUELCH             || '0',
+    resampleRate:   process.env.RTL_FM_RESAMPLE_RATE       || '',
+    lowpass:        process.env.RTL_FM_LOWPASS             || '',
+    tunerBandwidth: process.env.RTL_FM_TUNER_BANDWIDTH     || '',
+    directSampling: process.env.RTL_FM_DIRECT_SAMPLING     || '0',
+    offsetTuning:   process.env.RTL_FM_OFFSET_TUNING       || '0',
+    protocols:      process.env.MULTIMON_PROTOCOLS         || 'POCSAG1200',
+    verbosity:      process.env.MULTIMON_VERBOSITY         || '',
+    quiet:          process.env.MULTIMON_QUIET             || '1',
+    inputFormat:    process.env.MULTIMON_INPUT_FORMAT      || '',
+    pocsagSpecial:  process.env.MULTIMON_POCSAG_SPECIAL    || '0',
+    charset:        process.env.MULTIMON_POCSAG_CHARSET    || '',
   };
 
   if (process.env.DONGLES) {
@@ -68,8 +76,13 @@ function buildRtlArgs(cfg) {
   args.push('-s', cfg.sampleRate);
   args.push('-g', cfg.gain);
   args.push('-d', cfg.device);
-  if (cfg.ppm     && cfg.ppm     !== '0') args.push('-p', cfg.ppm);
-  if (cfg.squelch && cfg.squelch !== '0') args.push('-l', cfg.squelch);
+  if (cfg.ppm            && cfg.ppm            !== '0') args.push('-p', cfg.ppm);
+  if (cfg.squelch        && cfg.squelch        !== '0') args.push('-l', cfg.squelch);
+  if (cfg.resampleRate)                                  args.push('-r', cfg.resampleRate);
+  if (cfg.lowpass)                                       args.push('-E', cfg.lowpass);
+  if (cfg.tunerBandwidth)                                args.push('-T', cfg.tunerBandwidth);
+  if (cfg.directSampling && cfg.directSampling !== '0') args.push('-D', cfg.directSampling);
+  if (cfg.offsetTuning   && cfg.offsetTuning   !== '0') args.push('-O', cfg.offsetTuning);
   args.push('-');
   return args;
 }
@@ -77,9 +90,11 @@ function buildRtlArgs(cfg) {
 function buildMmonArgs(cfg) {
   const args = [];
   cfg.protocols.split(/\s+/).forEach(p => args.push('-a', p));
-  args.push('-t', 'raw');
-  if (cfg.quiet   === '1') args.push('-q');
-  if (cfg.charset) args.push('-C', cfg.charset);
+  args.push('-t', cfg.inputFormat || 'raw');
+  if (cfg.verbosity)             args.push('-v', cfg.verbosity);
+  if (cfg.quiet       === '1')   args.push('-q');
+  if (cfg.pocsagSpecial === '1') args.push('-s');
+  if (cfg.charset)               args.push('-C', cfg.charset);
   args.push('-');
   return args;
 }
@@ -173,8 +188,12 @@ async function pollConfig(pipelines) {
       freq: mainCfg.freq, modulation: mainCfg.modulation,
       sampleRate: mainCfg.sampleRate, gain: mainCfg.gain,
       device: mainCfg.device, ppm: mainCfg.ppm,
-      squelch: mainCfg.squelch, protocols: mainCfg.protocols,
-      quiet: mainCfg.quiet, charset: mainCfg.charset,
+      squelch: mainCfg.squelch, resampleRate: mainCfg.resampleRate,
+      lowpass: mainCfg.lowpass, tunerBandwidth: mainCfg.tunerBandwidth,
+      directSampling: mainCfg.directSampling, offsetTuning: mainCfg.offsetTuning,
+      protocols: mainCfg.protocols, verbosity: mainCfg.verbosity,
+      quiet: mainCfg.quiet, inputFormat: mainCfg.inputFormat,
+      pocsagSpecial: mainCfg.pocsagSpecial, charset: mainCfg.charset,
     };
     const r = await httpRequest('GET', `/client/config?freq=${encodeURIComponent(freqs)}&protocols=${encodeURIComponent(protocols)}&sdrRunning=${sdrRunning}&cfg=${encodeURIComponent(JSON.stringify(liveCfg))}`);
     if (r.status !== 200 || !r.body) return;

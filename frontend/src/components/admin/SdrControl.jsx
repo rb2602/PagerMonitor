@@ -17,17 +17,31 @@ const api  = (m, p, b) => fetch(`${BASE}${p}`, {
   body: b ? JSON.stringify(b) : undefined,
 }).then(r => r.json());
 
-const DONGLE_DEFAULTS = { device:'0', freq:'173.250M', gain:'40', ppm:'0', squelch:'0', protocols:'POCSAG1200', charset:'' };
+const DONGLE_DEFAULTS = {
+  device:'0', freq:'173.250M', modulation:'fm', sampleRate:'22050',
+  gain:'40', ppm:'0', squelch:'0', resampleRate:'', lowpass:'',
+  tunerBandwidth:'', directSampling:'0', offsetTuning:'0',
+  protocols:'POCSAG1200', verbosity:'', quiet:'1', inputFormat:'', pocsagSpecial:'0', charset:'',
+};
 const DONGLE_FIELDS = [
-  { key:'device',     label:'Device index', hint:'0 = first dongle, 1 = second, …', group:'rtl' },
-  { key:'freq',       label:'Frequency',    hint:'e.g. 173.250M or 173.250M:152.240M', group:'rtl' },
-  { key:'modulation', label:'Modulation',   hint:'fm | am | usb | lsb | wbfm | raw', group:'rtl' },
-  { key:'sampleRate', label:'Sample rate',  hint:'Hz — 22050 recommended for POCSAG', group:'rtl' },
-  { key:'gain',       label:'Gain (dB)',    hint:'0 = auto AGC, 40 = typical', group:'rtl' },
-  { key:'ppm',        label:'PPM',          hint:'Frequency correction (run rtl_test -p)', group:'rtl' },
-  { key:'squelch',    label:'Squelch',      hint:'0 = disabled', group:'rtl' },
-  { key:'protocols',  label:'Protocols',    hint:'Space-separated: POCSAG512 POCSAG1200 POCSAG2400 FLEX', group:'mmon' },
-  { key:'charset',    label:'Charset',      hint:'Set charset: US (default), FR, DE, SE, DK, SI', group:'mmon' },
+  { key:'device',         label:'Device index',   hint:'0 = first dongle, 1 = second, …',                          group:'rtl' },
+  { key:'freq',           label:'Frequency',       hint:'e.g. 173.250M or 173.250M:152.240M',                       group:'rtl' },
+  { key:'modulation',     label:'Modulation',      hint:'fm | am | usb | lsb | wbfm | raw',                         group:'rtl' },
+  { key:'sampleRate',     label:'Sample rate',     hint:'Hz — 22050 recommended for POCSAG',                        group:'rtl' },
+  { key:'gain',           label:'Gain (dB)',       hint:'0 = auto AGC, 40 = typical',                               group:'rtl' },
+  { key:'ppm',            label:'PPM',             hint:'Frequency correction (run rtl_test -p)',                    group:'rtl' },
+  { key:'squelch',        label:'Squelch',         hint:'0 = disabled',                                             group:'rtl' },
+  { key:'resampleRate',   label:'Resample rate (-r)',   hint:'Hz — leave empty to skip',                                 group:'rtl' },
+  { key:'lowpass',        label:'Post-process (-E)',    hint:'dc | deemp | edge | direct | offset (leave empty to disable)', group:'rtl' },
+  { key:'tunerBandwidth', label:'Tuner bandwidth (-T)', hint:'Hz — 0 = auto, leave empty to skip',                      group:'rtl' },
+  { key:'directSampling', label:'Direct sampling (-D)', hint:'0 = off, 1 = I-ADC, 2 = Q-ADC (HF <28 MHz)',              group:'rtl' },
+  { key:'offsetTuning',   label:'Offset tuning (-O)',   hint:'0 = off, 1 = on',                                         group:'rtl' },
+  { key:'protocols',      label:'Protocols (-a)',       hint:'Space-separated: POCSAG512 POCSAG1200 POCSAG2400 FLEX',    group:'mmon' },
+  { key:'verbosity',      label:'Verbosity (-v)',       hint:'0 = quiet, 1 = errors, 2 = info, 3 = verbose, 4 = debug',  group:'mmon' },
+  { key:'quiet',          label:'Quiet mode (-q)',      hint:'1 = on (suppress banner), 0 = off',                       group:'mmon' },
+  { key:'inputFormat',    label:'Input format (-t)',    hint:'raw | wav | au | aiff (always raw with rtl_fm)',           group:'mmon' },
+  { key:'pocsagSpecial',  label:'POCSAG special (-s)',  hint:'1 = on (special char decoding for numeric msgs), 0 = off', group:'mmon' },
+  { key:'charset',        label:'Charset (-C)',         hint:'Set charset: US (default), FR, DE, SE, DK, SI',           group:'mmon' },
 ];
 
 const FIELD_GROUPS = [

@@ -18,7 +18,7 @@ const { sendNotifications }     = require('../services/notifications');
 const { sendWebhooks }          = require('../services/webhooks');
 const { sendUserEmailNotifications } = require('../services/emailNotifier');
 const { sendPushPerUser }       = require('../services/webpush');
-const { recordMessage }         = require('../services/deadair');
+const { recordMessage, unregisterSource } = require('../services/deadair');
 const { recordClientMessage, recordClientPing, recordClientOffline, getClientConfig, popPendingCommand } = require('../services/clientTracker');
 const { getDedupConfig, passesFeedFilter } = require('../services/config');
 const logger                    = require('../utils/logger');
@@ -117,7 +117,7 @@ router.post('/message', requireClientKey, (req, res) => {
     const payload = { type: 'message', id, ...msg };
 
     broadcast(payload);
-    recordMessage();
+    recordMessage(clientId);
     recordClientMessage(clientId, req.ip, { message, freq, protocols });
 
     // Keyword alerts
@@ -170,7 +170,10 @@ router.get('/status', requireClientKey, (req, res) => {
 // POST /client/offline — client notifies server it is shutting down gracefully
 router.post('/offline', requireClientKey, (req, res) => {
   const clientId = req.headers['x-client-id'] || '';
-  if (clientId) recordClientOffline(clientId);
+  if (clientId) {
+    recordClientOffline(clientId);
+    unregisterSource(clientId);   // stop dead-air alerts for this client
+  }
   res.json({ ok: true });
 });
 

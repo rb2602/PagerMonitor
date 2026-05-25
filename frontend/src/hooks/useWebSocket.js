@@ -116,10 +116,8 @@ export function useWebSocket(backendUrl) {
           ));
         } else if (data.type === 'dead_air') {
           setSdrStatus(s => ({ ...s,
-            deadAir:             data.state,
-            deadAirLastMessage:  data.lastMessage,
-            deadAirDongleCount:  data.dongleCount || 1,
-            deadAirSource:       data.source || 'SDR',
+            deadAir:        data.state,
+            deadAirSources: data.silentSources || [],
           }));
           if (data.state === 'alert' && window.__playAlertSound) window.__playAlertSound('urgent');
         } else if (data.type === 'sdr_status') {

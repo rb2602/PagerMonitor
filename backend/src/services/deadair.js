@@ -3,43 +3,87 @@ const { broadcast }  = require('./websocket');
 const { getSetting } = require('./database');
 const logger = require('../utils/logger');
 
-let lastMessageTime = Date.now();
-let checkTimer      = null;
-let alerted         = false;
+// ── Per-source tracking ───────────────────────────────────────────────────────
+// sourceId → last message time (ms). Populated by registerSource / recordMessage.
+const sourceTimes    = new Map();
+// Sources currently in alert state
+const alertedSources = new Set();
+let checkTimer = null;
 
-function recordMessage() {
-  lastMessageTime = Date.now();
-  if (alerted) {
-    alerted = false;
-    broadcast({ type: 'dead_air', state: 'recovered', lastMessage: new Date(lastMessageTime).toISOString() });
-    logger.info('Dead air: recovered — message received');
+// ── Source lifecycle ──────────────────────────────────────────────────────────
+/** Call when a pipeline starts so the source is tracked even before its first message. */
+function registerSource(sourceId) {
+  if (!sourceTimes.has(sourceId)) {
+    sourceTimes.set(sourceId, Date.now());
+    logger.debug(`Dead air: registered source "${sourceId}"`);
   }
 }
 
+/** Call on intentional stop — removes source so no spurious alerts fire. */
+function unregisterSource(sourceId) {
+  if (!sourceId) return;
+  sourceTimes.delete(sourceId);
+  const wasAlerted = alertedSources.delete(sourceId);
+  if (wasAlerted) broadcastState();   // update UI immediately
+  logger.debug(`Dead air: unregistered source "${sourceId}"`);
+}
+
+// ── Record a message ──────────────────────────────────────────────────────────
+/**
+ * Call whenever a decoded message arrives.
+ * sourceId should match what was passed to registerSource().
+ * Falls back to 'sdr' for single-dongle legacy callers.
+ */
+function recordMessage(sourceId = 'sdr') {
+  sourceTimes.set(sourceId, Date.now());
+  if (alertedSources.has(sourceId)) {
+    alertedSources.delete(sourceId);
+    logger.info(`Dead air: recovered — ${sourceId}`);
+    broadcastState();
+  }
+}
+
+// ── Broadcast helpers ─────────────────────────────────────────────────────────
+function buildSilentSources() {
+  const now = Date.now();
+  return [...alertedSources].map(id => ({
+    id,
+    lastMessage: new Date(sourceTimes.get(id) ?? now).toISOString(),
+    silentMs:    now - (sourceTimes.get(id) ?? now),
+  }));
+}
+
+function broadcastState() {
+  const silentSources = buildSilentSources();
+  const state = silentSources.length > 0 ? 'alert' : 'recovered';
+  broadcast({ type: 'dead_air', state, silentSources });
+}
+
+// ── Periodic check ────────────────────────────────────────────────────────────
 function startDeadAirCheck() {
   clearInterval(checkTimer);
   checkTimer = setInterval(() => {
     const cfg = getSetting('dead_air_config', { enabled: false, thresholdHours: 6 });
-    if (!cfg.enabled) return;
+    if (!cfg.enabled || sourceTimes.size === 0) return;
 
     const threshold = (cfg.thresholdHours || 6) * 3600 * 1000;
-    const silent    = Date.now() - lastMessageTime;
+    const now       = Date.now();
+    let   changed   = false;
 
-    if (silent >= threshold && !alerted) {
-      alerted = true;
-      const since = new Date(lastMessageTime).toISOString();
-      const hours = Math.round(silent / 3600000);
-      // Check if multi-dongle — alert covers all dongles (any message from any dongle resets the timer)
-      const { getDongleConfigs } = require('./config');
-      const dongles = getDongleConfigs();
-      const dongleCount = Array.isArray(dongles) && dongles.length > 1 ? dongles.length : 1;
-      const source = dongleCount > 1 ? `all ${dongleCount} dongles` : 'SDR';
-      logger.warn(`Dead air: no messages from ${source} for ${hours}h (threshold: ${cfg.thresholdHours}h)`);
-      broadcast({ type: 'dead_air', state: 'alert', lastMessage: since, silentMs: silent, dongleCount, source });
+    for (const [id, lastMs] of sourceTimes) {
+      const silent = now - lastMs;
+      if (silent >= threshold && !alertedSources.has(id)) {
+        alertedSources.add(id);
+        const hours = Math.round(silent / 3600000);
+        logger.warn(`Dead air: "${id}" silent for ${hours}h (threshold: ${cfg.thresholdHours}h)`);
+        changed = true;
+      }
     }
+
+    if (changed) broadcastState();
   }, 60_000);
 }
 
 function stopDeadAirCheck() { clearInterval(checkTimer); }
 
-module.exports = { recordMessage, startDeadAirCheck, stopDeadAirCheck };
+module.exports = { recordMessage, registerSource, unregisterSource, startDeadAirCheck, stopDeadAirCheck };

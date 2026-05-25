@@ -33,7 +33,7 @@ import FeedFilter     from './FeedFilter.jsx';
 const TABS = [
   { group: 'SDR' },
   { id:'sdr',         label:'SDR Control',    icon:<Cpu size={14}/>,        sdrOnly: true },
-  { id:'deadair',     label:'Dead Air',       icon:<Radio size={14}/>,      sdrOnly: true },
+  { id:'deadair',     label:'Dead Air',       icon:<Radio size={14}/> },
   { id:'logs',        label:'Live Logs',      icon:<Terminal size={14}/>,   sdrOnly: true },
   { id:'sdrclients',  label:'SDR Clients',    icon:<Activity size={14}/>,   serverOnly: true },
   { id:'client',      label:'Client Key',     icon:<Wifi size={14}/>,       serverOnly: true },

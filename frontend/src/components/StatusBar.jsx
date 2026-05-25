@@ -45,56 +45,55 @@ function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount }) {
           const allActive  = clients.every(c => c.online && c.sdrRunning !== false);
           const someActive = clients.some(c => c.online && c.sdrRunning !== false);
           const anyOnline  = clients.some(c => c.online);
+          // Build per-client tooltips, then merge them onto the text label too
+          const clientTips = clients.map(c => {
+            const sdrOk = c.online && c.sdrRunning !== false;
+            if (!c.online) return `${c.id}${c.freq ? ` · ${c.freq}` : ''} · OFFLINE · ${fmtSilent(c.silentSec)}`;
+            if (sdrOk)     return `${c.id}${c.freq ? ` · ${c.freq}` : ''}${c.protocols ? ` · ${c.protocols}` : ''} · SDR ACTIVE`;
+            return `${c.id} · ONLINE · SDR not running`;
+          });
+          const combinedTip = clientTips.join('\n');
           return (<>
             {clients.map((c, i) => {
-              const sdrOk = c.online && c.sdrRunning !== false;
+              const sdrOk   = c.online && c.sdrRunning !== false;
               const dotBg   = sdrOk ? 'var(--accent-green)' : c.online ? 'var(--accent-amber)' : 'var(--accent-red)';
               const dotGlow = sdrOk ? 'var(--glow-green)'   : c.online ? 'var(--glow-amber)'   : 'var(--glow-red)';
-              const tip = !c.online
-                ? `${c.id}${c.freq ? ` · ${c.freq}` : ''} · OFFLINE · ${fmtSilent(c.silentSec)}`
-                : sdrOk
-                ? `${c.id}${c.freq ? ` · ${c.freq}` : ''}${c.protocols ? ` · ${c.protocols}` : ''} · SDR ACTIVE`
-                : `${c.id} · ONLINE · SDR not running`;
               return (
-                <span key={i} title={tip} style={{ display:'inline-flex', alignItems:'center' }}>
+                <span key={i} title={clientTips[i]} style={{ display:'inline-flex', alignItems:'center' }}>
                   <span style={{
                     width:'7px', height:'7px', borderRadius:'50%',
-                    background: dotBg,
-                    boxShadow:  dotGlow,
+                    background: dotBg, boxShadow: dotGlow,
                     animation:  c.online ? 'blink 2s ease-in-out infinite' : 'none',
                     flexShrink: 0,
                   }}/>
                 </span>
               );
             })}
-            <span style={{ fontWeight:700,
-              color: allActive ? 'var(--accent-green)' : someActive || anyOnline ? 'var(--accent-amber)' : 'var(--accent-red)' }}>
+            <span title={combinedTip} style={{ fontWeight:700,
+              color: allActive ? 'var(--accent-green)' : someActive || anyOnline ? 'var(--accent-amber)' : 'var(--accent-red)',
+              cursor:'default' }}>
               SDR {allActive ? 'ACTIVE' : someActive ? 'PARTIAL' : 'OFFLINE'}
             </span>
           </>);
-        })() : sdrStatus?.dongleStatuses?.length > 1 ? (
-          <>
-            {sdrStatus.dongleStatuses.map((d, i) => {
-              const ok  = d.running;
-              const tip = ok
-                ? `Dongle ${d.device} · ${d.freq}${d.protocols ? ` · ${d.protocols}` : ''} · ACTIVE`
-                : `Dongle ${d.device} · ${d.freq} · OFFLINE${d.error ? ` · ${d.error}` : ''}`;
-              return <SdrDot key={i} on={ok} title={tip} />;
-            })}
-            <span style={{ fontWeight:700,
-              color: sdrStatus.dongleStatuses.every(d => d.running)
-                ? 'var(--accent-green)'
-                : sdrStatus.dongleStatuses.some(d => d.running)
-                  ? 'var(--accent-amber)'
-                  : 'var(--accent-red)' }}>
-              SDR {sdrStatus.dongleStatuses.every(d => d.running)
-                ? 'ACTIVE'
-                : sdrStatus.dongleStatuses.some(d => d.running)
-                  ? 'PARTIAL'
-                  : 'OFFLINE'}
+        })() : sdrStatus?.dongleStatuses?.length > 1 ? (() => {
+          // Build per-dongle tooltips, then merge them onto the text label too
+          const dongleTips = sdrStatus.dongleStatuses.map(d => d.running
+            ? `Dongle ${d.device} · ${d.freq}${d.protocols ? ` · ${d.protocols}` : ''} · ACTIVE`
+            : `Dongle ${d.device} · ${d.freq} · OFFLINE${d.error ? ` · ${d.error}` : ''}`
+          );
+          const combinedTip = dongleTips.join('\n');
+          const allOn  = sdrStatus.dongleStatuses.every(d => d.running);
+          const someOn = sdrStatus.dongleStatuses.some(d => d.running);
+          return (<>
+            {sdrStatus.dongleStatuses.map((d, i) => (
+              <SdrDot key={i} on={d.running} title={dongleTips[i]} />
+            ))}
+            <span title={combinedTip} style={{ fontWeight:700, cursor:'default',
+              color: allOn ? 'var(--accent-green)' : someOn ? 'var(--accent-amber)' : 'var(--accent-red)' }}>
+              SDR {allOn ? 'ACTIVE' : someOn ? 'PARTIAL' : 'OFFLINE'}
             </span>
-          </>
-        ) : (() => {
+          </>);
+        })() : (() => {
           const freq      = sdrStatus?.freq;
           const protocols = Array.isArray(sdrStatus?.protocols) ? sdrStatus.protocols.join(' ') : sdrStatus?.protocols;
           const tip = sdrRunning
@@ -102,7 +101,8 @@ function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount }) {
             : `SDR OFFLINE${sdrStatus?.error ? ` · ${sdrStatus.error}` : ''}`;
           return (<>
             <SdrDot on={sdrRunning} title={tip} />
-            <span style={{ fontWeight:700, color: sdrRunning ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+            <span title={tip} style={{ fontWeight:700, cursor:'default',
+              color: sdrRunning ? 'var(--accent-green)' : 'var(--accent-red)' }}>
               SDR {sdrRunning ? 'ACTIVE' : 'OFFLINE'}
             </span>
           </>);
@@ -148,13 +148,23 @@ function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount }) {
           {Math.round(serverStatus.memory.rss / 1024 / 1024)}MB
         </span>
       </>}
-      {sdrStatus?.deadAir === 'alert' && <>
-        <span style={{ opacity:0.3 }}>·</span>
-        <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem', color:'var(--accent-red)', fontWeight:700 }}
-          title={`No messages from ${sdrStatus.deadAirSource || 'SDR'} since ${sdrStatus.deadAirLastMessage || 'unknown'}`}>
-          ⚠ DEAD AIR{sdrStatus.deadAirDongleCount > 1 ? ` (×${sdrStatus.deadAirDongleCount})` : ''}
-        </span>
-      </>}
+      {sdrStatus?.deadAir === 'alert' && (() => {
+        const sources = sdrStatus.deadAirSources || [];
+        const count   = sources.length;
+        const suffix  = count > 1
+          ? ` ×${count}`
+          : count === 1 ? `: ${sources[0].id}` : '';
+        const tip = count > 0
+          ? `Silent: ${sources.map(s => s.id).join(', ')}`
+          : 'No messages received';
+        return (<>
+          <span style={{ opacity:0.3 }}>·</span>
+          <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem', color:'var(--accent-red)', fontWeight:700 }}
+            title={tip}>
+            ⚠ DEAD AIR{suffix}
+          </span>
+        </>);
+      })()}
       {sdrStatus?.error && <>
         <span style={{ opacity:0.3 }}>·</span>
         <span style={{ color:'var(--accent-red)' }}>{sdrStatus.error}</span>

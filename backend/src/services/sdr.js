@@ -6,7 +6,7 @@ const { broadcast }          = require('./websocket');
 const { resolveAlias }       = require('../utils/aliases');
 const { sendNotifications }  = require('./notifications');
 const { sendWebhooks }       = require('./webhooks');
-const { recordMessage }      = require('./deadair');
+const { recordMessage, registerSource, unregisterSource } = require('./deadair');
 const { sendUserEmailNotifications } = require('./emailNotifier');
 const { sendPushPerUser }    = require('./webpush');
 const { parseLocation, geocodeAddress } = require('../utils/parseLocation');
@@ -93,15 +93,24 @@ function buildRtlFmArgsForDongle(dongle) {
   const args = [];
   const freq = dongle.freq || e.RTL_FM_FREQ || '152.240M';
   freq.split(':').forEach(f => args.push('-f', f.trim()));
-  args.push('-M', dongle.modulation  || e.RTL_FM_MODULATION  || 'fm');
-  args.push('-s', dongle.sampleRate  || e.RTL_FM_SAMPLE_RATE || '22050');
-  args.push('-g', dongle.gain        || e.RTL_FM_GAIN        || '40');
+  args.push('-M', dongle.modulation     || e.RTL_FM_MODULATION     || 'fm');
+  args.push('-s', dongle.sampleRate     || e.RTL_FM_SAMPLE_RATE    || '22050');
+  args.push('-g', dongle.gain           || e.RTL_FM_GAIN           || '40');
   args.push('-d', String(dongle.device ?? 0));
   const ppm = dongle.ppm || e.RTL_FM_PPM;
   if (ppm && ppm !== '0') args.push('-p', ppm);
   const sql = dongle.squelch || e.RTL_FM_SQUELCH;
   if (sql && sql !== '0') args.push('-l', sql);
-  if (e.RTL_FM_RESAMPLE_RATE)   args.push('-r', e.RTL_FM_RESAMPLE_RATE);
+  const resample = dongle.resampleRate || e.RTL_FM_RESAMPLE_RATE;
+  if (resample) args.push('-r', resample);
+  const lowpass = dongle.lowpass || e.RTL_FM_LOWPASS;
+  if (lowpass) args.push('-E', lowpass);
+  const tbw = dongle.tunerBandwidth || e.RTL_FM_TUNER_BANDWIDTH;
+  if (tbw) args.push('-T', tbw);
+  const ds = dongle.directSampling || e.RTL_FM_DIRECT_SAMPLING;
+  if (ds && ds !== '0') args.push('-D', ds);
+  const ot = dongle.offsetTuning || e.RTL_FM_OFFSET_TUNING;
+  if (ot && ot !== '0') args.push('-O', ot);
   args.push('-');
   return args;
 }
@@ -111,10 +120,13 @@ function buildMmonArgsForDongle(dongle) {
   const args = [];
   const protocols = dongle.protocols || e.MULTIMON_PROTOCOLS || 'POCSAG1200';
   protocols.split(/\s+/).forEach(p => args.push('-a', p));
-  args.push('-t', e.MULTIMON_INPUT_FORMAT || 'raw');
-  if (e.MULTIMON_VERBOSITY)               args.push('-v', e.MULTIMON_VERBOSITY);
-  if ((e.MULTIMON_QUIET || '1') === '1')  args.push('-q');
-  if (e.MULTIMON_POCSAG_SPECIAL === '1')  args.push('-s');
+  args.push('-t', dongle.inputFormat || e.MULTIMON_INPUT_FORMAT || 'raw');
+  const verbosity = dongle.verbosity || e.MULTIMON_VERBOSITY;
+  if (verbosity) args.push('-v', verbosity);
+  const quiet = dongle.quiet != null ? dongle.quiet : (e.MULTIMON_QUIET || '1');
+  if (quiet === '1') args.push('-q');
+  const special = dongle.pocsagSpecial || e.MULTIMON_POCSAG_SPECIAL;
+  if (special === '1') args.push('-s');
   const charset = dongle.charset || e.MULTIMON_POCSAG_CHARSET;
   if (charset) args.push('-C', charset);
   args.push('-');
@@ -208,6 +220,7 @@ async function startSdrPipeline() {
     mmonProc = spawn('multimon-ng', mmonArgs, { stdio: ['pipe',   'pipe', 'pipe'] });
 
     logger.info(`Spawned rtl_fm PID=${rtlProc.pid}  multimon-ng PID=${mmonProc.pid}`);
+    registerSource('sdr');
 
     const rtlTap = new PassThrough();
     let lastRtlMs = Date.now();
@@ -312,6 +325,7 @@ function stopSdrPipeline() {
   restartTimer = null;
   killOwnProcesses();
   stopMultiDonglePipelines();
+  unregisterSource('sdr');
   sdrStatus.running = false;
   broadcast({ type: 'sdr_status', status: getStatus() });
   logger.info('SDR pipeline stopped');
@@ -375,10 +389,10 @@ function parseLine(line) {
   return null;
 }
 
-// Alias so the multi-dongle spawner code compiles
-const handleDecodedMessage = (msg) => handleLine(msg.raw || '');
+// Alias so the multi-dongle spawner code compiles — sourceId is threaded through
+const handleDecodedMessage = (msg, sourceId = 'sdr') => handleLine(msg.raw || '', sourceId);
 
-function handleLine(line) {
+function handleLine(line, sourceId = 'sdr') {
   let parsed = null;
 
   const pm = POCSAG_RE.exec(line);
@@ -462,7 +476,7 @@ function handleLine(line) {
   const payload = { type: 'message', id, ...msg };
 
   broadcast(payload);
-  recordMessage();
+  recordMessage(sourceId);
   sdrStatus.lastMessage = timestamp;
 
   // Keyword alerts
@@ -501,6 +515,8 @@ function handleLine(line) {
 
 // ── Multi-dongle pipeline spawner ─────────────────────────────────────────────
 function spawnDonglePipeline(dongle, label, myGen) {
+  const dongleSourceId = `dongle-${dongle.device}`;
+  registerSource(dongleSourceId);
   const rtlArgs  = buildRtlFmArgsForDongle(dongle);
   const mmonArgs = buildMmonArgsForDongle(dongle);
   logger.info(`${label} Starting: device=${dongle.device} freq=${dongle.freq || process.env.RTL_FM_FREQ}`);
@@ -547,7 +563,7 @@ function spawnDonglePipeline(dongle, label, myGen) {
       const msg = parseLine(t); if (!msg) continue;
       state.lastMessage = new Date().toISOString();
       logger.info(`${label} [${msg.protocol}] ${msg.capcode}: ${msg.message.substring(0,60)}`);
-      handleDecodedMessage(msg);
+      handleDecodedMessage(msg, dongleSourceId);
     }
   });
 
@@ -610,6 +626,7 @@ function stopMultiDonglePipelines() {
     try { if (p.rtlProc) p.rtlProc.stdout?.unpipe(); } catch (_) {}
     try { p.mmonProc?.kill('SIGTERM'); } catch (_) {}
     try { p.rtlProc?.kill('SIGTERM'); } catch (_) {}
+    try { unregisterSource(`dongle-${p.cfg.device}`); } catch (_) {}
   }
   donglePipelines = [];
 }

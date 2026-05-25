@@ -30,8 +30,9 @@ export default function DeadAirConfig() {
         <Radio size={16} style={{color:'var(--accent-red)'}}/> Dead Air Detection
       </h2>
       <p style={{fontSize:'0.82rem',color:'var(--text-3)',marginBottom:'1rem',lineHeight:1.6}}>
-        Alert when SDR is running but no messages have been received for a configurable period.
-        Useful to detect a silently failed SDR or antenna issue.
+        Alert when no messages have been received from a source for a configurable period.
+        Monitors each local dongle and remote client independently — shows which specific
+        source went silent. Useful to detect a failed SDR, antenna issue, or offline Pi.
       </p>
 
       <div className="pm-card">

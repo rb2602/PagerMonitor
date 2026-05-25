@@ -21,6 +21,7 @@ const { getSdrConfig, saveSdrConfig, getDedupConfig, saveDedupConfig,
         getNotifFilter, saveNotifFilter, getDongleConfigs, saveDongleConfigs,
         getFeedFilter, saveFeedFilter } = require('../services/config');
 const { getClientCount } = require('../services/websocket');
+const { unregisterSource } = require('../services/deadair');
 const logger = require('../utils/logger');
 
 // All admin routes require at least editor role by default
@@ -455,7 +456,12 @@ router.get('/sdr-clients', adminOnly, (_req, res) => {
 });
 
 router.delete('/sdr-clients/:id', adminOnly, (req, res) => {
-  try { resetClient(decodeURIComponent(req.params.id)); res.json({ ok: true }); }
+  try {
+    const id = decodeURIComponent(req.params.id);
+    resetClient(id);
+    unregisterSource(id);   // clear dead-air tracking for removed client
+    res.json({ ok: true });
+  }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 

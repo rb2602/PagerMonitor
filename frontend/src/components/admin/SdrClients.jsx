@@ -16,16 +16,24 @@ const api  = (m, p, b) => fetch(`${BASE}${p}`, {
 }).then(r => r.json());
 
 const CFG_FIELDS = [
-  { key:'freq',        label:'Frequency',     placeholder:'173.250M', hint:'Use : to scan multiple: 173.250M:152.240M',          group:'rtl' },
-  { key:'modulation',  label:'Modulation',    placeholder:'fm',       hint:'fm | am | usb | lsb | wbfm | raw',                   group:'rtl' },
-  { key:'sampleRate',  label:'Sample rate',   placeholder:'22050',    hint:'Hz — 22050 recommended for POCSAG',                  group:'rtl' },
-  { key:'gain',        label:'Gain (dB)',      placeholder:'40',       hint:'0 = auto AGC, 40 = typical',                        group:'rtl' },
-  { key:'device',      label:'Device index',  placeholder:'0',        hint:'0 = first dongle, 1 = second, …',                   group:'rtl' },
-  { key:'ppm',         label:'PPM',            placeholder:'0',        hint:'Frequency correction (run rtl_test -p)',             group:'rtl' },
-  { key:'squelch',     label:'Squelch',        placeholder:'0',        hint:'0 = disabled',                                      group:'rtl' },
-  { key:'protocols',   label:'Protocols',      placeholder:'POCSAG1200', hint:'Space-separated: POCSAG512 POCSAG1200 POCSAG2400 FLEX', group:'mmon' },
-  { key:'quiet',       label:'Quiet mode',     placeholder:'1',        hint:'1 = suppress banner (recommended), 0 = off',        group:'mmon' },
-  { key:'charset',     label:'Charset (-C)',   placeholder:'',         hint:'Set charset: US (default), FR, DE, SE, DK, SI',     group:'mmon' },
+  { key:'freq',           label:'Frequency',      placeholder:'173.250M', hint:'Use : to scan multiple: 173.250M:152.240M',               group:'rtl' },
+  { key:'modulation',     label:'Modulation',     placeholder:'fm',       hint:'fm | am | usb | lsb | wbfm | raw',                        group:'rtl' },
+  { key:'sampleRate',     label:'Sample rate',    placeholder:'22050',    hint:'Hz — 22050 recommended for POCSAG',                       group:'rtl' },
+  { key:'gain',           label:'Gain (dB)',       placeholder:'40',       hint:'0 = auto AGC, 40 = typical',                             group:'rtl' },
+  { key:'device',         label:'Device index',   placeholder:'0',        hint:'0 = first dongle, 1 = second, …',                        group:'rtl' },
+  { key:'ppm',            label:'PPM',             placeholder:'0',        hint:'Frequency correction (run rtl_test -p)',                  group:'rtl' },
+  { key:'squelch',        label:'Squelch',         placeholder:'0',        hint:'0 = disabled',                                           group:'rtl' },
+  { key:'resampleRate',   label:'Resample rate (-r)',   placeholder:'',         hint:'Hz — leave empty to skip',                               group:'rtl' },
+  { key:'lowpass',        label:'Post-process (-E)',    placeholder:'',         hint:'dc | deemp | edge | direct | offset (leave empty to disable)', group:'rtl' },
+  { key:'tunerBandwidth', label:'Tuner bandwidth (-T)', placeholder:'',         hint:'Hz — 0 = auto, leave empty to skip',                     group:'rtl' },
+  { key:'directSampling', label:'Direct sampling (-D)', placeholder:'0',        hint:'0 = off, 1 = I-ADC, 2 = Q-ADC (HF <28 MHz)',             group:'rtl' },
+  { key:'offsetTuning',   label:'Offset tuning (-O)',   placeholder:'0',        hint:'0 = off, 1 = on',                                        group:'rtl' },
+  { key:'protocols',      label:'Protocols (-a)',       placeholder:'POCSAG1200', hint:'Space-separated: POCSAG512 POCSAG1200 POCSAG2400 FLEX', group:'mmon' },
+  { key:'verbosity',      label:'Verbosity (-v)',       placeholder:'',         hint:'0 = quiet, 1 = errors, 2 = info, 3 = verbose, 4 = debug', group:'mmon' },
+  { key:'quiet',          label:'Quiet mode (-q)',      placeholder:'1',        hint:'1 = on (suppress banner), 0 = off',                      group:'mmon' },
+  { key:'inputFormat',    label:'Input format (-t)',    placeholder:'raw',      hint:'raw | wav | au | aiff (always raw with rtl_fm)',          group:'mmon' },
+  { key:'pocsagSpecial',  label:'POCSAG special (-s)',  placeholder:'0',        hint:'1 = on (special char decoding for numeric msgs), 0 = off', group:'mmon' },
+  { key:'charset',        label:'Charset (-C)',         placeholder:'',         hint:'Set charset: US (default), FR, DE, SE, DK, SI',          group:'mmon' },
 ];
 
 function fmtTime(ts) {
