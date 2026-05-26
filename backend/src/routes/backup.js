@@ -151,8 +151,17 @@ router.post('/restore', requireAdmin, async (req, res) => {
     const archPath = path.resolve(ARCHIVE_PATH);
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 
-    // Close current DB connections by checkpointing WAL
+    // Checkpoint WAL so all pending writes are flushed into the main DB file
     try { getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
+
+    // Remove stale WAL and SHM files — if they're left on disk SQLite will
+    // try to apply them to the newly-restored DB on next open, causing SQLITE_CORRUPT
+    for (const suffix of ['-wal', '-shm']) {
+      const walFile = mainPath + suffix;
+      if (fs.existsSync(walFile)) { try { fs.unlinkSync(walFile); } catch (_) {} }
+      const archWal = archPath + suffix;
+      if (fs.existsSync(archWal)) { try { fs.unlinkSync(archWal); } catch (_) {} }
+    }
 
     // Backup current files before overwriting
     if (fs.existsSync(mainPath)) {
