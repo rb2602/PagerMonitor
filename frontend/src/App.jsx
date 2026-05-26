@@ -98,13 +98,18 @@ export default function App() {
     return () => clearInterval(t);
   }, [user]);
 
-  // Fetch latest GitHub commit SHA once on login — used by status bar update badges
+  // Fetch latest GitHub commit SHA on login + re-check every hour
+  // Used by status bar to show update availability badges
   useEffect(() => {
     if (!user) return;
-    fetch('https://api.github.com/repos/Dj3ky/PagerMonitor/commits/main')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.sha) setLatestSha(d.sha); })
-      .catch(() => {});
+    const check = () =>
+      fetch('https://api.github.com/repos/Dj3ky/PagerMonitor/commits/main')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.sha) setLatestSha(d.sha); })
+        .catch(() => {});
+    check();
+    const t = setInterval(check, 60 * 60 * 1000); // re-check every hour
+    return () => clearInterval(t);
   }, [user]);
 
   useEffect(() => {
