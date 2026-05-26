@@ -24,6 +24,19 @@ export default function DeadAirConfig() {
 
   const hrs = cfg.thresholdHours || 6;
 
+  // Format: "6h", "1d", "1d 6h", "2d 12h", …
+  const fmtHours = h => {
+    if (h < 24) return `${h}h`;
+    const d = Math.floor(h / 24), r = h % 24;
+    return r === 0 ? `${d}d` : `${d}d ${r}h`;
+  };
+  const descHours = h => {
+    if (h < 24) return `${h} hour${h !== 1 ? 's' : ''}`;
+    const d = Math.floor(h / 24), r = h % 24;
+    const ds = d === 1 ? '1 day' : `${d} days`;
+    return r === 0 ? ds : `${ds} ${r}h`;
+  };
+
   return (
     <div style={{maxWidth:'480px'}}>
       <h2 style={{fontSize:'1rem',fontWeight:700,color:'var(--text-1)',marginBottom:'0.5rem',display:'flex',alignItems:'center',gap:'0.5rem'}}>
@@ -53,16 +66,20 @@ export default function DeadAirConfig() {
           <label className="pm-label">Alert threshold</label>
           <div style={{display:'flex',alignItems:'center',gap:'0.75rem'}}>
             <input type="range" min="1" max="168" step="1" value={hrs}
-              onChange={e=>setCfg(c=>({...c,thresholdHours:parseInt(e.target.value,10)}))}
+              onChange={e => {
+                let v = parseInt(e.target.value, 10);
+                if (v >= 24) v = Math.round(v / 6) * 6;
+                setCfg(c => ({...c, thresholdHours: Math.max(1, Math.min(168, v))}));
+              }}
               style={{flex:1,accentColor:'var(--accent-red)'}}
               disabled={!cfg.enabled}/>
             <span style={{fontFamily:'monospace',fontSize:'1rem',fontWeight:700,
               color:'var(--accent-red)',minWidth:'60px',textAlign:'right'}}>
-              {hrs >= 24 ? `${Math.round(hrs/24*10)/10}d` : `${hrs}h`}
+              {fmtHours(hrs)}
             </span>
           </div>
           <div style={{fontSize:'0.72rem',color:'var(--text-3)',marginTop:'0.3rem'}}>
-            {hrs === 1 ? '1 hour' : hrs < 24 ? `${hrs} hours` : `${Math.round(hrs/24*10)/10} days`} of silence before alerting. Range: 1h – 7 days.
+            {descHours(hrs)} of silence before alerting. Range: 1h – 7 days.
           </div>
         </div>
 

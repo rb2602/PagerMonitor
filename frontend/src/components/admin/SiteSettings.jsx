@@ -44,7 +44,7 @@ export default function SiteSettings() {
   const [badgeSeconds, setBadgeSeconds] = useState(DEFAULTS.newBadgeSeconds);
   const [mapDotColor, setMapDotColor]       = useState(DEFAULTS.mapDotColor);
   const [showMapButton, setShowMapButton]   = useState(DEFAULTS.showMapButton);
-  const [mapMaxAgeDays, setMapMaxAgeDays]   = useState(DEFAULTS.mapMaxAgeDays);
+  const [mapMaxAgeHours, setMapMaxAgeHours] = useState(DEFAULTS.mapMaxAgeDays * 24); // stored as hours internally
   const [geocodeCountry, setGeocodeCountry] = useState(DEFAULTS.geocodeCountry);
   const [publicMode, setPublicMode]         = useState(DEFAULTS.publicMode);
   const [savingMap, setSavingMap]       = useState(false);
@@ -71,7 +71,7 @@ export default function SiteSettings() {
         setBadgeSeconds(d.newBadgeSeconds ?? DEFAULTS.newBadgeSeconds);
         setMapDotColor(d.mapDotColor || DEFAULTS.mapDotColor);
         setShowMapButton(d.showMapButton !== false);
-        setMapMaxAgeDays(d.mapMaxAgeDays ?? DEFAULTS.mapMaxAgeDays);
+        setMapMaxAgeHours(Math.round((d.mapMaxAgeDays ?? DEFAULTS.mapMaxAgeDays) * 24));
         setGeocodeCountry(d.geocodeCountry || DEFAULTS.geocodeCountry);
         setPublicMode(!!d.publicMode);
       })
@@ -82,7 +82,7 @@ export default function SiteSettings() {
   const flashBadge = (type, text) => { setBadgeMsg({ type, text }); setTimeout(() => setBadgeMsg(null), 3500); };
   const flashMap   = (type, text) => { setMapMsg({ type, text });   setTimeout(() => setMapMsg(null),   3500); };
 
-  const allSettings = () => ({ ...siteForm, newBadgeSeconds: badgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays, geocodeCountry, publicMode });
+  const allSettings = () => ({ ...siteForm, newBadgeSeconds: badgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays: mapMaxAgeHours / 24, geocodeCountry, publicMode });
 
   // Save site name/description only
   const saveSite = async () => {
@@ -311,19 +311,24 @@ export default function SiteSettings() {
         </div>
 
         <div>
-          <label className="pm-label">Show locations from last (days)</label>
+          <label className="pm-label">Show locations from last</label>
           <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
-            <input type="range" min="1" max="365" step="1" value={mapMaxAgeDays}
-              onChange={e => setMapMaxAgeDays(parseInt(e.target.value, 10))}
+            <input type="range" min="1" max="8760" step="1" value={mapMaxAgeHours}
+              onChange={e => {
+                let v = parseInt(e.target.value, 10);
+                if (v >= 24) v = Math.round(v / 24) * 24;
+                setMapMaxAgeHours(Math.max(1, Math.min(8760, v)));
+              }}
               style={{ flex:1, accentColor:'var(--accent-green)' }} />
             <span style={{ fontFamily:'monospace', fontSize:'1rem', fontWeight:700,
               color:'var(--accent-green)', minWidth:'60px', textAlign:'right' }}>
-              {mapMaxAgeDays === 365 ? '1 year' : `${mapMaxAgeDays}d`}
+              {mapMaxAgeHours >= 8760 ? '1y' : mapMaxAgeHours >= 24 ? `${mapMaxAgeHours / 24}d` : `${mapMaxAgeHours}h`}
             </span>
           </div>
           <div style={{ fontSize:'0.72rem', color:'var(--text-3)', marginTop:'0.3rem' }}>
-            Only show locations from the last {mapMaxAgeDays} day{mapMaxAgeDays !== 1 ? 's' : ''} on the map.
-            Older locations are hidden but not deleted. Range: 1–365 days.
+            Only show locations from the last{' '}
+            {mapMaxAgeHours >= 8760 ? '1 year' : mapMaxAgeHours >= 24 ? `${mapMaxAgeHours / 24} day${mapMaxAgeHours !== 24 ? 's' : ''}` : `${mapMaxAgeHours} hour${mapMaxAgeHours !== 1 ? 's' : ''}`}{' '}
+            on the map. Older locations are hidden but not deleted.
           </div>
         </div>
 
