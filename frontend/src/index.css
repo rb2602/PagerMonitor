@@ -68,11 +68,6 @@
   /* iOS Safari: use fill-available so the height tracks the visible viewport */
   html {
     height: -webkit-fill-available;
-    /* Hard-stop: the document itself must never scroll — all scrolling happens
-       inside inner panels. Without this, a transient resize of the visual
-       viewport (mobile toolbar animating in/out) can make .app-shell overflow
-       the body by 1–2 px, letting the page scroll and pushing the header up. */
-    overflow: hidden;
   }
 
   body {
@@ -81,9 +76,9 @@
     font-family: 'Space Grotesk', sans-serif;
     -webkit-font-smoothing: antialiased;
     transition: background 0.2s, color 0.2s;
-    /* Belt-and-suspenders: prevent both rubber-band bounce and any body scroll */
-    overscroll-behavior: none;
-    overflow: hidden;
+    /* contain: stops scroll chaining to the browser (no back-swipe bleed) but
+       KEEPS pull-to-refresh working — use "none" would kill PTR. */
+    overscroll-behavior: contain;
   }
 
   ::-webkit-scrollbar { width: 4px; height: 4px; }

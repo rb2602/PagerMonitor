@@ -100,7 +100,7 @@ function TabContent({ tab, sdrStatus, serverStatus, onRulesChange, onGroupsChang
   }
 }
 
-export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onGroupsChange }) {
+export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onGroupsChange, requestedTab, onTabHandled }) {
   const { user } = useAuth();
   const sdrDisabled = serverStatus?.sdrDisabled === true;
   const isEditor    = user?.role === 'editor';
@@ -132,6 +132,15 @@ export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onG
     setTab(t);
     setSidebarOpen(false);
   };
+
+  // Navigate to a specific tab when requested externally (e.g. status-bar update link
+  // clicked while the Settings panel is already open — the panel is already mounted
+  // so sessionStorage writes don't trigger a re-read; we need a proper prop+effect).
+  useEffect(() => {
+    if (!requestedTab) return;
+    handleSetTab(requestedTab);
+    onTabHandled?.();
+  }, [requestedTab]);
 
   // Close dropdown on outside click
   useEffect(() => {

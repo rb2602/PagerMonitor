@@ -7,6 +7,16 @@ const getToken = () => localStorage.getItem('pm_token') || '';
 
 const DEFAULTS = { siteName: 'PagerMonitor', siteDescription: 'Real-time pager decoder', newBadgeSeconds: 10, mapDotColor: '#00ff9d', showMapButton: true, mapMaxAgeDays: 30, publicMode: false, geocodeCountry: 'si' };
 
+// Snap points for the map age slider (hours). 1h–1y, 15 stops.
+const MAP_SNAP = [1, 2, 4, 6, 12, 24, 48, 72, 168, 336, 720, 1440, 2160, 4380, 8760];
+const mapSnapIdx  = h => MAP_SNAP.reduce((best, v, i) => Math.abs(v - h) < Math.abs(MAP_SNAP[best] - h) ? i : best, 0);
+const fmtMapHours = h => h >= 8760 ? '1y' : h >= 24 ? `${h / 24}d` : `${h}h`;
+const descMapHours = h =>
+  h < 24    ? `${h} hour${h !== 1 ? 's' : ''}`
+  : h === 24 ? '1 day'
+  : h >= 8760 ? '1 year'
+  : `${h / 24} days`;
+
 async function fetchSettings() {
   const r = await fetch(`${BASE}/admin/site-settings`, { headers: { Authorization: `Bearer ${getToken()}` } });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -44,7 +54,7 @@ export default function SiteSettings() {
   const [badgeSeconds, setBadgeSeconds] = useState(DEFAULTS.newBadgeSeconds);
   const [mapDotColor, setMapDotColor]       = useState(DEFAULTS.mapDotColor);
   const [showMapButton, setShowMapButton]   = useState(DEFAULTS.showMapButton);
-  const [mapMaxAgeDays, setMapMaxAgeDays]   = useState(DEFAULTS.mapMaxAgeDays);
+  const [mapMaxAgeHours, setMapMaxAgeHours] = useState(DEFAULTS.mapMaxAgeDays * 24); // stored as hours internally
   const [geocodeCountry, setGeocodeCountry] = useState(DEFAULTS.geocodeCountry);
   const [publicMode, setPublicMode]         = useState(DEFAULTS.publicMode);
   const [savingMap, setSavingMap]       = useState(false);
@@ -71,7 +81,7 @@ export default function SiteSettings() {
         setBadgeSeconds(d.newBadgeSeconds ?? DEFAULTS.newBadgeSeconds);
         setMapDotColor(d.mapDotColor || DEFAULTS.mapDotColor);
         setShowMapButton(d.showMapButton !== false);
-        setMapMaxAgeDays(d.mapMaxAgeDays ?? DEFAULTS.mapMaxAgeDays);
+        setMapMaxAgeHours(Math.round((d.mapMaxAgeDays ?? DEFAULTS.mapMaxAgeDays) * 24));
         setGeocodeCountry(d.geocodeCountry || DEFAULTS.geocodeCountry);
         setPublicMode(!!d.publicMode);
       })
@@ -82,7 +92,7 @@ export default function SiteSettings() {
   const flashBadge = (type, text) => { setBadgeMsg({ type, text }); setTimeout(() => setBadgeMsg(null), 3500); };
   const flashMap   = (type, text) => { setMapMsg({ type, text });   setTimeout(() => setMapMsg(null),   3500); };
 
-  const allSettings = () => ({ ...siteForm, newBadgeSeconds: badgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays, geocodeCountry, publicMode });
+  const allSettings = () => ({ ...siteForm, newBadgeSeconds: badgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays: mapMaxAgeHours / 24, geocodeCountry, publicMode });
 
   // Save site name/description only
   const saveSite = async () => {
@@ -311,19 +321,29 @@ export default function SiteSettings() {
         </div>
 
         <div>
-          <label className="pm-label">Show locations from last (days)</label>
+          <label className="pm-label">Show locations from last</label>
           <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
-            <input type="range" min="1" max="365" step="1" value={mapMaxAgeDays}
-              onChange={e => setMapMaxAgeDays(parseInt(e.target.value, 10))}
+            <input type="range" min="0" max={MAP_SNAP.length - 1} step="1" value={mapSnapIdx(mapMaxAgeHours)}
+              onChange={e => setMapMaxAgeHours(MAP_SNAP[parseInt(e.target.value, 10)])}
               style={{ flex:1, accentColor:'var(--accent-green)' }} />
             <span style={{ fontFamily:'monospace', fontSize:'1rem', fontWeight:700,
-              color:'var(--accent-green)', minWidth:'60px', textAlign:'right' }}>
-              {mapMaxAgeDays === 365 ? '1 year' : `${mapMaxAgeDays}d`}
+              color:'var(--accent-green)', minWidth:'42px', textAlign:'right' }}>
+              {fmtMapHours(mapMaxAgeHours)}
             </span>
           </div>
-          <div style={{ fontSize:'0.72rem', color:'var(--text-3)', marginTop:'0.3rem' }}>
-            Only show locations from the last {mapMaxAgeDays} day{mapMaxAgeDays !== 1 ? 's' : ''} on the map.
-            Older locations are hidden but not deleted. Range: 1–365 days.
+          {/* Snap point labels */}
+          <div style={{ display:'flex', justifyContent:'space-between', marginTop:'0.2rem',
+            fontSize:'0.6rem', color:'var(--text-3)', fontFamily:'monospace', userSelect:'none' }}>
+            {MAP_SNAP.map((v, i) => (
+              <span key={i} style={{
+                color: mapMaxAgeHours === v ? 'var(--accent-green)' : undefined,
+                fontWeight: mapMaxAgeHours === v ? 700 : undefined,
+              }}>{fmtMapHours(v)}</span>
+            ))}
+          </div>
+          <div style={{ fontSize:'0.72rem', color:'var(--text-3)', marginTop:'0.4rem' }}>
+            Only show locations from the last {descMapHours(mapMaxAgeHours)} on the map.
+            Older locations are hidden but not deleted.
           </div>
         </div>
 

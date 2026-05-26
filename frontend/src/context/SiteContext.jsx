@@ -20,7 +20,7 @@ export function SiteProvider({ children }) {
           newBadgeSeconds: Math.max(3, parseInt(d.newBadgeSeconds, 10) || DEFAULT.newBadgeSeconds),
           mapDotColor:     d.mapDotColor     || DEFAULT.mapDotColor,
           showMapButton:   d.showMapButton   !== false,
-          mapMaxAgeDays:   Math.max(1, parseInt(d.mapMaxAgeDays, 10) || DEFAULT.mapMaxAgeDays),
+          mapMaxAgeDays:   Math.max(1/24, parseFloat(d.mapMaxAgeDays) || DEFAULT.mapMaxAgeDays),
           publicMode:      !!d.publicMode,
           geocodeCountry:  /^[a-z]{2}$/.test(d.geocodeCountry) ? d.geocodeCountry : DEFAULT.geocodeCountry,
         };

@@ -39,6 +39,9 @@ export default function App() {
   const [pollSdrStatus, setPollSdrStatus]   = useState(null);
   const [latestSha, setLatestSha]           = useState(null);
   const [view, setView] = useState(() => sessionStorage.getItem('pm_view') || 'feed');
+  // Requested admin tab — set by the status-bar update link so AdminPanel can
+  // switch tabs even when it is already mounted (view already === 'admin').
+  const [requestedAdminTab, setRequestedAdminTab] = useState(null);
 
   const handleSetView = (v) => {
     sessionStorage.setItem('pm_view', v);
@@ -216,7 +219,7 @@ export default function App() {
       <StatusBar sdrStatus={effectiveSdrStatus} serverStatus={serverStatus}
         wsStatus={wsStatus} messageCount={messages.length}
         latestSha={latestSha}
-        onNavigate={(tab) => { handleSetView('admin'); sessionStorage.setItem('pm_admin_tab', tab); }} />
+        onNavigate={(tab) => { handleSetView('admin'); setRequestedAdminTab(tab); }} />
 
       {view === 'feed' && (
         <FilterBar
@@ -262,7 +265,9 @@ export default function App() {
           </div>
           {view === 'admin' && (
             <AdminPanel sdrStatus={effectiveSdrStatus} serverStatus={serverStatus}
-              onRulesChange={setHighlightRules} onGroupsChange={setGroups} />
+              onRulesChange={setHighlightRules} onGroupsChange={setGroups}
+              requestedTab={requestedAdminTab}
+              onTabHandled={() => setRequestedAdminTab(null)} />
           )}
         </ErrorBoundary>
       </main>

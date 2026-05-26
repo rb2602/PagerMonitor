@@ -327,7 +327,7 @@ router.put('/site-settings', adminOnly, (req, res) => {
       siteName: siteName || 'PagerMonitor', siteDescription: siteDescription || '',
       newBadgeSeconds: Math.max(3, Math.min(300, parseInt(newBadgeSeconds,10)||10)),
       mapDotColor: mapDotColor || '#00ff9d', showMapButton: showMapButton !== false,
-      mapMaxAgeDays: Math.max(1, Math.min(365, parseInt(mapMaxAgeDays,10)||30)),
+      mapMaxAgeDays: Math.max(1/24, Math.min(365, parseFloat(mapMaxAgeDays)||30)),
       publicMode: !!publicMode,
       geocodeCountry: /^[a-z]{2}$/.test(geocodeCountry) ? geocodeCountry : 'si',
     });

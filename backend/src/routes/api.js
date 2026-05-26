@@ -101,7 +101,7 @@ router.get('/feed-filter', requireAuth, (_req, res) => {
 router.get('/map', requireAuth, (req, res) => {
   try {
     const limit      = Math.min(parseInt(req.query.limit || '500', 10), 2000);
-    const maxAgeDays = parseInt(req.query.maxAgeDays || '30', 10);
+    const maxAgeDays = parseFloat(req.query.maxAgeDays || '30');
     const rows = getDb().prepare(`
       SELECT m.id, m.timestamp, m.capcode, m.message, m.protocol, m.lat, m.lng,
              a.name as alias_name, a.color as alias_color,

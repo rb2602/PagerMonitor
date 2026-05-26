@@ -7,6 +7,12 @@ const api  = (m,p,b) => fetch(`${BASE}${p}`,{method:m,headers:{'Content-Type':'a
 
 function Flash({msg}){ if(!msg)return null; const ok=msg.type==='ok'; return <div style={{padding:'0.4rem 0.75rem',borderRadius:'0.4rem',fontSize:'0.78rem',fontFamily:'monospace',marginBottom:'0.75rem',color:ok?'var(--accent-green)':'var(--accent-red)',background:`color-mix(in srgb,${ok?'var(--accent-green)':'var(--accent-red)'} 10%,transparent)`,border:`1px solid color-mix(in srgb,${ok?'var(--accent-green)':'var(--accent-red)'} 30%,transparent)`}}>{msg.text}</div>; }
 
+// Fixed snap points (hours). Slider index maps 1-to-1 to these values.
+const SNAP = [1, 2, 3, 6, 12, 18, 24, 48, 72, 96, 120, 144, 168];
+const snapIdx  = h => SNAP.reduce((best, v, i) => Math.abs(v - h) < Math.abs(SNAP[best] - h) ? i : best, 0);
+const fmtHours = h => h < 24 ? `${h}h` : `${h / 24}d`;
+const descHours = h => h < 24 ? `${h} hour${h !== 1 ? 's' : ''}` : h === 24 ? '1 day' : `${h / 24} days`;
+
 export default function DeadAirConfig() {
   const [cfg, setCfg] = useState({ enabled: false, thresholdHours: 6 });
   const [saving, setSaving] = useState(false);
@@ -23,6 +29,7 @@ export default function DeadAirConfig() {
   };
 
   const hrs = cfg.thresholdHours || 6;
+  const idx = snapIdx(hrs);
 
   return (
     <div style={{maxWidth:'480px'}}>
@@ -52,17 +59,27 @@ export default function DeadAirConfig() {
         <div style={{marginBottom:'1.25rem',opacity:cfg.enabled?1:0.45,transition:'opacity 0.2s'}}>
           <label className="pm-label">Alert threshold</label>
           <div style={{display:'flex',alignItems:'center',gap:'0.75rem'}}>
-            <input type="range" min="1" max="168" step="1" value={hrs}
-              onChange={e=>setCfg(c=>({...c,thresholdHours:parseInt(e.target.value,10)}))}
+            <input type="range" min="0" max={SNAP.length - 1} step="1" value={idx}
+              onChange={e => setCfg(c => ({...c, thresholdHours: SNAP[parseInt(e.target.value, 10)]}))}
               style={{flex:1,accentColor:'var(--accent-red)'}}
               disabled={!cfg.enabled}/>
             <span style={{fontFamily:'monospace',fontSize:'1rem',fontWeight:700,
-              color:'var(--accent-red)',minWidth:'60px',textAlign:'right'}}>
-              {hrs >= 24 ? `${Math.round(hrs/24*10)/10}d` : `${hrs}h`}
+              color:'var(--accent-red)',minWidth:'50px',textAlign:'right'}}>
+              {fmtHours(hrs)}
             </span>
           </div>
-          <div style={{fontSize:'0.72rem',color:'var(--text-3)',marginTop:'0.3rem'}}>
-            {hrs === 1 ? '1 hour' : hrs < 24 ? `${hrs} hours` : `${Math.round(hrs/24*10)/10} days`} of silence before alerting. Range: 1h – 7 days.
+          {/* Snap point labels */}
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:'0.2rem',
+            fontSize:'0.6rem',color:'var(--text-3)',fontFamily:'monospace',userSelect:'none'}}>
+            {SNAP.map((v, i) => (
+              <span key={i} style={{
+                color: i === idx ? 'var(--accent-red)' : undefined,
+                fontWeight: i === idx ? 700 : undefined,
+              }}>{fmtHours(v)}</span>
+            ))}
+          </div>
+          <div style={{fontSize:'0.72rem',color:'var(--text-3)',marginTop:'0.4rem'}}>
+            {descHours(hrs)} of silence before alerting.
           </div>
         </div>
 
