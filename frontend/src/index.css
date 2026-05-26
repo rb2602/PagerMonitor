@@ -65,20 +65,18 @@
     margin: 0; padding: 0;
   }
 
-  /* iOS Safari: use fill-available so the height tracks the visible viewport */
-  html {
-    height: -webkit-fill-available;
-  }
-
   body {
     background: var(--bg-0);
     color: var(--text-1);
     font-family: 'Space Grotesk', sans-serif;
     -webkit-font-smoothing: antialiased;
     transition: background 0.2s, color 0.2s;
-    /* contain: stops scroll chaining to the browser (no back-swipe bleed) but
-       KEEPS pull-to-refresh working — use "none" would kill PTR. */
-    overscroll-behavior: contain;
+    /* x: contain  — prevents back/forward swipe navigation chaining
+       y: auto     — allows pull-to-refresh to reach the browser
+       PTR is gated by overscrollBehaviorY on the feed scroll container:
+       'contain' when scrolled down, 'auto' only when at top + finger touching. */
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
   }
 
   ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -87,12 +85,19 @@
   ::-webkit-scrollbar-thumb:hover { background: var(--bg-5); }
 }
 
-/* ── App shell height — uses dvh so the header never hides behind the mobile toolbar ── */
+/* ── App shell — fixed to the visual viewport ──────────────────────────────────
+   Using position:fixed instead of height:100dvh because on Android Chrome the
+   html element's -webkit-fill-available height equals the *large* viewport
+   (toolbar hidden), while 100dvh equals the *dynamic* viewport (shrinks when the
+   dark browser toolbar is visible).  That difference makes the body taller than
+   the app-shell, so the body becomes scrollable by exactly the toolbar height —
+   the entire app-shell (and the sticky header inside it) drifts up.  In light
+   mode the white toolbar blends with the white header so the drift is invisible;
+   in dark mode the contrast between --bg-0 and --bg-1 makes it obvious.
+   position:fixed anchors the shell to the viewport so body scroll is irrelevant. */
 .app-shell {
-  /* Fallback for older browsers */
-  height: 100vh;
-  /* Modern: dynamic viewport height tracks the visible area as toolbars show/hide */
-  height: 100dvh;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
 }
 
 /* ── Semantic colour utilities ────────────────────────────── */

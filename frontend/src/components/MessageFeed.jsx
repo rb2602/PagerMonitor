@@ -41,17 +41,43 @@ export default function MessageFeed({ messages, highlightRules = [], groups = []
   const pendingMarkId = useRef(null);
   const scrollRef     = useRef(null);
 
-  // Dynamic overscroll: allow pull-to-refresh when at the very top (scrollTop===0),
-  // contain it when scrolled down so the header doesn't shift on bottom overscroll.
+  // Dynamic overscroll on the feed scroll container:
+  //   scrolled down        → 'contain'  — bottom overscroll stays in the feed
+  //   at top + touching    → 'auto'     — deliberate pull-to-refresh propagates
+  //                                       up through the body to the browser
+  //   at top + NOT touching→ 'contain'  — momentum that coasted to scrollTop=0
+  //                                       is absorbed here; without this the body
+  //                                       (overscroll-behavior-y: auto) would
+  //                                       propagate it to the browser even though
+  //                                       the user isn't asking for a refresh
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    let touching = false;
+
     const update = () => {
-      el.style.overscrollBehaviorY = el.scrollTop > 0 ? 'contain' : 'auto';
+      if (el.scrollTop > 0) {
+        el.style.overscrollBehaviorY = 'contain';
+      } else {
+        el.style.overscrollBehaviorY = touching ? 'auto' : 'contain';
+      }
     };
-    update(); // set initial value
-    el.addEventListener('scroll', update, { passive: true });
-    return () => el.removeEventListener('scroll', update);
+
+    const onTouchStart  = () => { touching = true;  update(); };
+    const onTouchEnd    = () => { touching = false; };
+
+    update();
+    el.addEventListener('scroll',      update,       { passive: true });
+    el.addEventListener('touchstart',  onTouchStart, { passive: true });
+    el.addEventListener('touchend',    onTouchEnd,   { passive: true });
+    el.addEventListener('touchcancel', onTouchEnd,   { passive: true });
+
+    return () => {
+      el.removeEventListener('scroll',      update);
+      el.removeEventListener('touchstart',  onTouchStart);
+      el.removeEventListener('touchend',    onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+    };
   }, []);
 
   // Load user's last-seen from server on mount
