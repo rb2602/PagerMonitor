@@ -37,6 +37,7 @@ export default function App() {
   const [searching, setSearching]           = useState(false);
   const [serverStatus, setServerStatus]     = useState(null);
   const [pollSdrStatus, setPollSdrStatus]   = useState(null);
+  const [latestSha, setLatestSha]           = useState(null);
   const [view, setView] = useState(() => sessionStorage.getItem('pm_view') || 'feed');
 
   const handleSetView = (v) => {
@@ -95,6 +96,15 @@ export default function App() {
     poll();
     const t = setInterval(poll, 10_000);
     return () => clearInterval(t);
+  }, [user]);
+
+  // Fetch latest GitHub commit SHA once on login — used by status bar update badges
+  useEffect(() => {
+    if (!user) return;
+    fetch('https://api.github.com/repos/Dj3ky/PagerMonitor/commits/main')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.sha) setLatestSha(d.sha); })
+      .catch(() => {});
   }, [user]);
 
   useEffect(() => {
@@ -199,7 +209,9 @@ export default function App() {
       {showProfile && <UserProfile onClose={() => setShowProfile(false)} />}
 
       <StatusBar sdrStatus={effectiveSdrStatus} serverStatus={serverStatus}
-        wsStatus={wsStatus} messageCount={messages.length} />
+        wsStatus={wsStatus} messageCount={messages.length}
+        latestSha={latestSha}
+        onNavigate={(tab) => { handleSetView('admin'); sessionStorage.setItem('pm_admin_tab', tab); }} />
 
       {view === 'feed' && (
         <FilterBar

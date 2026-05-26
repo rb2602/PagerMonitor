@@ -1,5 +1,5 @@
 import { useRef, useLayoutEffect, useState, useEffect } from 'react';
-import { Activity, Wifi, WifiOff, Clock, HardDrive, RefreshCw } from 'lucide-react';
+import { Activity, Wifi, WifiOff, Clock, HardDrive, RefreshCw, GitCommit } from 'lucide-react';
 
 function fmtSilent(sec) {
   if (sec < 60)        return `${sec}s ago`;
@@ -29,7 +29,7 @@ function SdrDot({ on, title }) {
   );
 }
 
-function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount }) {
+function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount, latestSha, onNavigate }) {
   const sdrRunning  = sdrStatus?.running ?? false;
   const sdrDisabled = serverStatus?.sdrDisabled ?? false;
   const total       = serverStatus?.stats?.total;
@@ -169,6 +169,46 @@ function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount }) {
         <span style={{ opacity:0.3 }}>·</span>
         <span style={{ color:'var(--accent-red)' }}>{sdrStatus.error}</span>
       </>}
+
+      {/* ── Update availability badges (only shown when an update exists) ── */}
+      {(() => {
+        if (!latestSha) return null;
+        const serverHash  = serverStatus?.gitHash;
+        const sdrClients  = serverStatus?.sdrClients;
+
+        const serverUpdate = serverHash && latestSha !== serverHash;
+        // Any online client that has reported a hash and it differs from latest
+        const clientUpdate = Array.isArray(sdrClients) &&
+          sdrClients.some(c => c.gitHash && latestSha !== c.gitHash);
+
+        if (!serverUpdate && !clientUpdate) return null;
+
+        const btnStyle = {
+          background: 'none', border: 'none', padding: 0, margin: 0,
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+          color: 'var(--accent-amber)', fontFamily: 'monospace', fontSize: 'inherit',
+          fontWeight: 700,
+        };
+
+        return (<>
+          <span style={{ opacity:0.3 }}>·</span>
+          {serverUpdate && (
+            <button style={btnStyle}
+              title={`Server update available\nInstalled: ${serverHash?.slice(0,7)} · GitHub: ${latestSha.slice(0,7)}\nClick to go to Update page`}
+              onClick={() => onNavigate?.('update')}>
+              <GitCommit size={10}/> Server update
+            </button>
+          )}
+          {serverUpdate && clientUpdate && <span style={{ opacity:0.3 }}>·</span>}
+          {clientUpdate && (
+            <button style={btnStyle}
+              title={`One or more clients have an update available\nClick to go to SDR Clients`}
+              onClick={() => onNavigate?.('sdrclients')}>
+              <GitCommit size={10}/> Client update
+            </button>
+          )}
+        </>);
+      })()}
     </>
   );
 }
@@ -179,7 +219,7 @@ function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount }) {
 //    the computed matrix (actual rendered position, not the keyframe offset)
 // 3. We convert that pixel offset back to a negative animation-delay
 // 4. The animation continues seamlessly from where it was
-function MobileTicker({ sdrStatus, serverStatus, wsStatus, messageCount }) {
+function MobileTicker({ sdrStatus, serverStatus, wsStatus, messageCount, latestSha, onNavigate }) {
   const wrapRef  = useRef(null);
   const startRef = useRef(null); // when animation effectively started (ms)
 
@@ -217,11 +257,11 @@ function MobileTicker({ sdrStatus, serverStatus, wsStatus, messageCount }) {
       <div ref={wrapRef} className="ticker-wrap">
         <span className="ticker-copy">
           <StatusItems sdrStatus={sdrStatus} serverStatus={serverStatus}
-            wsStatus={wsStatus} messageCount={messageCount} />
+            wsStatus={wsStatus} messageCount={messageCount} latestSha={latestSha} onNavigate={onNavigate} />
         </span>
         <span className="ticker-copy">
           <StatusItems sdrStatus={sdrStatus} serverStatus={serverStatus}
-            wsStatus={wsStatus} messageCount={messageCount} />
+            wsStatus={wsStatus} messageCount={messageCount} latestSha={latestSha} onNavigate={onNavigate} />
         </span>
       </div>
     </div>
@@ -244,7 +284,7 @@ function LiveClock() {
   );
 }
 
-export default function StatusBar({ sdrStatus, serverStatus, wsStatus, messageCount }) {
+export default function StatusBar({ sdrStatus, serverStatus, wsStatus, messageCount, latestSha, onNavigate }) {
   return (
     <>
       {/* Desktop — static flex row */}
@@ -255,13 +295,13 @@ export default function StatusBar({ sdrStatus, serverStatus, wsStatus, messageCo
         fontFamily:'monospace', fontSize:'0.75rem', color:'var(--text-3)',
       }}>
         <StatusItems sdrStatus={sdrStatus} serverStatus={serverStatus}
-          wsStatus={wsStatus} messageCount={messageCount} />
+          wsStatus={wsStatus} messageCount={messageCount} latestSha={latestSha} onNavigate={onNavigate} />
         <LiveClock />
       </div>
 
       {/* Mobile — scrolling ticker (hidden on desktop via CSS) */}
       <MobileTicker sdrStatus={sdrStatus} serverStatus={serverStatus}
-        wsStatus={wsStatus} messageCount={messageCount} />
+        wsStatus={wsStatus} messageCount={messageCount} latestSha={latestSha} onNavigate={onNavigate} />
 
       <style>{`
         @keyframes tickerMove {

@@ -1,6 +1,10 @@
-const express = require('express');
-const router  = express.Router();
-const os      = require('os');
+const express      = require('express');
+const router       = express.Router();
+const os           = require('os');
+const path         = require('path');
+const { execSync } = require('child_process');
+
+const ROOT_DIR = path.join(__dirname, '../../..');
 
 const { getDb, getHistory, searchMessages, getStats, getAliases, upsertAlias, deleteAlias,
         getGroups, getHighlightRules, getLastSeenId, setLastSeenId } = require('../services/database');
@@ -60,12 +64,17 @@ router.get('/status', requireAuth, (_req, res) => {
     try {
       sdrClients = require('../services/clientTracker').getClients().map(c => ({
         id: c.id, online: c.online, freq: c.freq, protocols: c.protocols, silentSec: c.silentSec,
-        sdrRunning: c.sdrRunning,
+        sdrRunning: c.sdrRunning, gitHash: c.gitHash || null,
       }));
     } catch (_) { sdrClients = []; }
   }
+
+  // Server's own git hash — used by status bar to show update availability
+  let gitHash = null;
+  try { gitHash = execSync('git rev-parse HEAD', { cwd: ROOT_DIR, timeout: 3000 }).toString().trim(); } catch (_) {}
+
   res.json({ ok: true, version: require('../../package.json').version, mode: process.env.MODE||'single',
-    sdrDisabled, sdrClients,
+    sdrDisabled, sdrClients, gitHash,
     uptime: process.uptime(), wsClients: getClientCount(),
     memory: process.memoryUsage(), loadAvg: os.loadavg(),
     freeMem: os.freemem(), totalMem: os.totalmem(), sdr: getStatus(), stats: getStats() });
