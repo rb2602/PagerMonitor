@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth }      from './context/AuthContext.jsx';
-import { useWebSocket } from './hooks/useWebSocket.js';
+import { useWebSocket, subscribeWsMessages } from './hooks/useWebSocket.js';
 import { fetchHistory, fetchSearch, fetchStatus, fetchRules, fetchGroups } from './utils/api.js';
 import LoginPage     from './components/LoginPage.jsx';
 import Header        from './components/Header.jsx';
@@ -118,9 +118,16 @@ export default function App() {
   useEffect(() => {
     if (paused && messages.length > 0) setNewCount(n => n + 1);
     else setPage(0);
-    // Browser notification for newest message
-    if (messages.length > 0) browserNotif.notify(messages[0]);
   }, [messages]);
+
+  // Browser notifications — subscribe directly to raw WS events, not React state.
+  // This fires once per live message, regardless of React batching, and never
+  // fires for historical messages loaded via fetchHistory() on page load/reconnect.
+  useEffect(() => {
+    return subscribeWsMessages(data => {
+      if (data.type === 'message') browserNotif.notify(data);
+    });
+  }, [browserNotif.notify]);
 
   const [mapFlyTo, setMapFlyTo] = useState(null);
 

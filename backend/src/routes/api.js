@@ -273,4 +273,55 @@ router.delete('/push/subscribe', requireAuth, (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Count of push subscriptions for the current user (so the UI can show "2 devices subscribed")
+router.get('/push/subscriptions/count', requireAuth, (req, res) => {
+  try {
+    const { getDb } = require('../services/database');
+    const row = getDb()
+      .prepare('SELECT COUNT(*) as count FROM push_subscriptions WHERE user_id = ?')
+      .get(req.session.userId);
+    res.json({ count: row?.count ?? 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Send a test push only to the current user's subscribed devices
+router.post('/push/test', requireAuth, async (req, res) => {
+  try {
+    const { getDb }  = require('../services/database');
+    const webpush    = (() => { try { return require('web-push'); } catch { return null; } })();
+    if (!webpush) return res.status(503).json({ error: 'web-push not installed' });
+
+    const subs = getDb()
+      .prepare('SELECT * FROM push_subscriptions WHERE user_id = ?')
+      .all(req.session.userId);
+
+    if (!subs.length) return res.json({ ok: true, sent: 0 });
+
+    const payload = JSON.stringify({
+      title: '📟 PagerMonitor',
+      body:  '✅ Push notifications are working on this device!',
+      tag:   'pm-test',
+      data:  {},
+    });
+
+    let sent = 0;
+    await Promise.allSettled(subs.map(async sub => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          payload,
+          { TTL: 60 }
+        );
+        sent++;
+      } catch (err) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          getDb().prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint);
+        }
+      }
+    }));
+
+    res.json({ ok: true, sent });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;

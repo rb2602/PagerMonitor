@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Save, X, Bell, Lock, Mail, Smartphone } from 'lucide-react';
+import { User, Save, X, Bell, Lock, Mail, Smartphone, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
@@ -39,13 +39,17 @@ export default function UserProfile({ onClose }) {
   const [pw, setPw]         = useState({ current:'', next:'', confirm:'' });
   const [saving, setSaving] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
-  const [emailMsg, setEmailMsg] = useState(null);
-  const [pwMsg, setPwMsg]       = useState(null);
-  const [prefMsg, setPrefMsg]   = useState(null);
+  const [emailMsg, setEmailMsg]   = useState(null);
+  const [pwMsg, setPwMsg]         = useState(null);
+  const [prefMsg, setPrefMsg]     = useState(null);
+  const [pushCount, setPushCount] = useState(null);   // number of subscribed devices
+  const [testMsg, setTestMsg]     = useState(null);   // test push result
+  const [testing, setTesting]     = useState(false);
 
   const flashEmail = (t,m) => { setEmailMsg({type:t,text:m}); setTimeout(()=>setEmailMsg(null),3000); };
   const flashPw    = (t,m) => { setPwMsg({type:t,text:m});    setTimeout(()=>setPwMsg(null),3000); };
   const flashPref  = (t,m) => { setPrefMsg({type:t,text:m});  setTimeout(()=>setPrefMsg(null),3000); };
+  const flashTest  = (t,m) => { setTestMsg({type:t,text:m});  setTimeout(()=>setTestMsg(null),5000); };
 
   useEffect(() => {
     // Load current email and prefs
@@ -53,6 +57,7 @@ export default function UserProfile({ onClose }) {
     api('GET', '/auth/me/notif-prefs').then(setPrefs).catch(() => {});
     api('GET', '/admin/groups').then(d => setGroups(Array.isArray(d) ? d.filter(g => !g.parent_id) : [])).catch(() => {});
     api('GET', '/admin/aliases').then(d => setAliases(Array.isArray(d) ? d : [])).catch(() => {});
+    api('GET', '/api/push/subscriptions/count').then(d => setPushCount(d.count ?? null)).catch(() => {});
   }, []);
 
   const saveEmail = async () => {
@@ -85,6 +90,22 @@ export default function UserProfile({ onClose }) {
   const setListField = (field, value) => {
     const arr = value.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
     setPrefs(p => ({ ...p, [field]: arr }));
+  };
+
+  const sendTestPush = async () => {
+    setTesting(true);
+    try {
+      const r = await api('POST', '/api/push/test');
+      if (r.ok) {
+        // Refresh subscription count (stale endpoints get pruned during the test send)
+        api('GET', '/api/push/subscriptions/count').then(d => setPushCount(d.count ?? null)).catch(() => {});
+        if (r.sent === 0) flashTest('err', 'No active subscriptions found — re-enable push on your devices');
+        else flashTest('ok', `Test sent to ${r.sent} device${r.sent === 1 ? '' : 's'} — did you get it on all of them?`);
+      } else {
+        flashTest('err', r.error || 'Failed to send');
+      }
+    } catch (e) { flashTest('err', e.message); }
+    finally { setTesting(false); }
   };
 
   return (
@@ -242,6 +263,26 @@ export default function UserProfile({ onClose }) {
               Controls which messages send a push notification to your browser or installed PWA.
               Requires the bell icon to be enabled.
             </p>
+
+            {/* Device subscription status + test button */}
+            <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.75rem',
+              padding:'0.4rem 0.6rem', borderRadius:'0.4rem', background:'var(--bg-0)',
+              border:'1px solid var(--border)', flexWrap:'wrap' }}>
+              <Smartphone size={12} style={{ color: pushCount > 0 ? 'var(--accent-green)' : 'var(--text-3)' }} />
+              <span style={{ fontSize:'0.75rem', color:'var(--text-2)', flex:1 }}>
+                {pushCount === null ? 'Checking…'
+                  : pushCount === 0 ? 'No devices subscribed — enable push via the 🔔 bell in the header'
+                  : `${pushCount} device${pushCount === 1 ? '' : 's'} subscribed`}
+              </span>
+              {pushCount > 0 && (
+                <button className="pm-btn" onClick={sendTestPush} disabled={testing}
+                  title="Send a test push to all your subscribed devices"
+                  style={{ fontSize:'0.72rem', padding:'0.15rem 0.45rem' }}>
+                  <Send size={11}/> {testing ? 'Sending…' : 'Test push'}
+                </button>
+              )}
+            </div>
+            {testMsg && <Flash msg={testMsg} />}
 
             <label style={{ display:'flex', alignItems:'center', gap:'0.5rem',
               fontSize:'0.85rem', cursor:'pointer', marginBottom:'0.75rem' }}>
