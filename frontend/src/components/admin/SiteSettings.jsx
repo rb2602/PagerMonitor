@@ -312,7 +312,7 @@ export default function SiteSettings() {
 
         <div>
           <label className="pm-label">Show locations from last</label>
-          <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
             <input type="range" min="1" max="8760" step="1" value={mapMaxAgeHours}
               onChange={e => {
                 let v = parseInt(e.target.value, 10);
@@ -320,15 +320,38 @@ export default function SiteSettings() {
                 setMapMaxAgeHours(Math.max(1, Math.min(8760, v)));
               }}
               style={{ flex:1, accentColor:'var(--accent-green)' }} />
+            {/* ± buttons for fine control */}
+            {[[-1,'−'],[1,'+']].map(([dir, label], i) => i === 0 ? (
+              <button key={dir} onClick={() => setMapMaxAgeHours(h => {
+                const step = h >= 24 ? 24 : 1;
+                const next = h - step;
+                return Math.max(1, next < 24 && h >= 24 ? 23 : next);
+              })} disabled={mapMaxAgeHours <= 1}
+                style={{ width:'26px', height:'26px', borderRadius:'0.35rem', border:'1px solid var(--border)',
+                  background:'var(--bg-3)', color:'var(--text-1)', cursor: mapMaxAgeHours <= 1 ? 'default' : 'pointer',
+                  fontFamily:'monospace', fontSize:'1rem', lineHeight:1, padding:0, opacity: mapMaxAgeHours <= 1 ? 0.35 : 1 }}>
+                {label}
+              </button>
+            ) : (
+              <button key={dir} onClick={() => setMapMaxAgeHours(h => {
+                const step = h >= 24 ? 24 : 1;
+                return Math.min(8760, h + step);
+              })} disabled={mapMaxAgeHours >= 8760}
+                style={{ width:'26px', height:'26px', borderRadius:'0.35rem', border:'1px solid var(--border)',
+                  background:'var(--bg-3)', color:'var(--text-1)', cursor: mapMaxAgeHours >= 8760 ? 'default' : 'pointer',
+                  fontFamily:'monospace', fontSize:'1rem', lineHeight:1, padding:0, opacity: mapMaxAgeHours >= 8760 ? 0.35 : 1 }}>
+                {label}
+              </button>
+            ))}
             <span style={{ fontFamily:'monospace', fontSize:'1rem', fontWeight:700,
-              color:'var(--accent-green)', minWidth:'60px', textAlign:'right' }}>
+              color:'var(--accent-green)', minWidth:'52px', textAlign:'right' }}>
               {mapMaxAgeHours >= 8760 ? '1y' : mapMaxAgeHours >= 24 ? `${mapMaxAgeHours / 24}d` : `${mapMaxAgeHours}h`}
             </span>
           </div>
           <div style={{ fontSize:'0.72rem', color:'var(--text-3)', marginTop:'0.3rem' }}>
             Only show locations from the last{' '}
             {mapMaxAgeHours >= 8760 ? '1 year' : mapMaxAgeHours >= 24 ? `${mapMaxAgeHours / 24} day${mapMaxAgeHours !== 24 ? 's' : ''}` : `${mapMaxAgeHours} hour${mapMaxAgeHours !== 1 ? 's' : ''}`}{' '}
-            on the map. Older locations are hidden but not deleted.
+            on the map. − / + steps by 1 hour (when &lt; 1 day) or 1 day.
           </div>
         </div>
 
