@@ -97,7 +97,7 @@ async function _send(sub, payload) {
     await webpush.sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
       JSON.stringify(payload),
-      { TTL: 3600 }
+      { TTL: 86400 }  // 24 h — keeps message queued if phone is offline/in dead zone
     );
   } catch (err) {
     if (err.statusCode === 410 || err.statusCode === 404) {

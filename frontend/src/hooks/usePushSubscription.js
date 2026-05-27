@@ -15,12 +15,28 @@ function urlBase64ToUint8Array(b64) {
 export function usePushSubscription() {
   const [subscribed, setSubscribed] = useState(false);
 
-  // Check initial subscription state on mount
+  // Check initial subscription state on mount.
+  // If the browser dropped the subscription (common on Android after OS kills Chrome),
+  // automatically re-subscribe so future pushes keep arriving.
   useEffect(() => {
     if (!supported) return;
     navigator.serviceWorker.ready
-      .then(reg => reg.pushManager.getSubscription())
-      .then(sub => setSubscribed(!!sub))
+      .then(async reg => {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          // Subscription exists — re-register it with the server in case the server
+          // lost it (e.g. DB was wiped or endpoint changed after a browser update)
+          setSubscribed(true);
+          const tok = localStorage.getItem('pm_token') || '';
+          await fetch('/api/push/subscribe', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+            body:    JSON.stringify(sub.toJSON()),
+          }).catch(() => {});
+        } else {
+          setSubscribed(false);
+        }
+      })
       .catch(() => {});
   }, []);
 

@@ -44,15 +44,18 @@ self.addEventListener('push', e => {
 
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      // Skip if the user already has the app open and focused
-      if (clients.some(c => c.focused)) return;
+      // Skip push if the app is open in any window — the in-page WebSocket
+      // notification will handle it, avoiding duplicates on PC.
+      // Only show push when no app window is open at all (e.g. phone locked).
+      if (clients.length > 0) return;
       return self.registration.showNotification(data.title || 'PagerMonitor', {
-        body:   data.body  || '',
-        icon:   '/icon-192.png',
-        badge:  '/badge-96.png',
-        tag:    data.tag   || 'pm-message',
-        data:   data.data  || {},
-        silent: false,
+        body:     data.body  || '',
+        icon:     '/icon-192.png',
+        badge:    '/badge-96.png',
+        tag:      data.tag   || 'pm-message',
+        renotify: true,   // always ring/vibrate even if same capcode replaces previous notification
+        data:     data.data  || {},
+        silent:   false,
       });
     })
   );
