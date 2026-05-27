@@ -157,6 +157,18 @@ export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onG
   const actualTabs  = visibleTabs.filter(t => !t.group);
   const currentTab  = actualTabs.find(t => t.id === tab) || actualTabs[0];
 
+  // When sdrDisabled changes (serverStatus loads), the stored tab may no longer
+  // be visible (e.g. 'sdr' in server mode, 'sdrclients' in single-device mode).
+  // Reset to the first available tab so state, sidebar highlight and content stay in sync.
+  useEffect(() => {
+    if (actualTabs.length && !actualTabs.find(t => t.id === tab)) {
+      const newTab = actualTabs[0].id;
+      sessionStorage.setItem('pm_admin_tab', newTab);
+      setTab(newTab);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sdrDisabled]);
+
   const handleSetTab = (t) => {
     sessionStorage.setItem('pm_admin_tab', t);
     setTab(t);
@@ -292,7 +304,7 @@ export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onG
           {/* Tab content */}
           <div ref={contentRef} style={{ flex:1, overflow:'hidden auto', padding:'1.25rem', position:'relative' }}>
             <ErrorBoundary key={tab} name={currentTab.label}>
-              <TabContent tab={tab} sdrStatus={sdrStatus} serverStatus={serverStatus}
+              <TabContent tab={currentTab.id} sdrStatus={sdrStatus} serverStatus={serverStatus}
                 onRulesChange={onRulesChange} onGroupsChange={onGroupsChange} />
             </ErrorBoundary>
 
