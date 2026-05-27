@@ -44,10 +44,14 @@ self.addEventListener('push', e => {
 
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      // Skip push if the app is open in any window — the in-page WebSocket
-      // notification will handle it, avoiding duplicates on PC.
-      // Only show push when no app window is open at all (e.g. phone locked).
-      if (clients.length > 0) return;
+      const isTest = data.tag === 'pm-test';
+
+      // For normal messages: skip push if the app is currently visible in any window
+      // — the in-page WebSocket notification will handle it, avoiding duplicates on PC.
+      // Use visibilityState so minimised/background tabs still receive the push.
+      // Always show test pushes so the user can confirm push works on each device.
+      if (!isTest && clients.some(c => c.visibilityState === 'visible')) return;
+
       return self.registration.showNotification(data.title || 'PagerMonitor', {
         body:     data.body  || '',
         icon:     '/icon-192.png',
