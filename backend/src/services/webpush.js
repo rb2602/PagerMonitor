@@ -97,7 +97,7 @@ async function _send(sub, payload) {
     await webpush.sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
       JSON.stringify(payload),
-      { TTL: 86400 }  // 24 h — keeps message queued if phone is offline/in dead zone
+      { TTL: 86400, urgency: 'high' }  // high urgency = FCM wakes Android from Doze immediately
     );
   } catch (err) {
     if (err.statusCode === 410 || err.statusCode === 404) {

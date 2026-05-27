@@ -310,7 +310,7 @@ router.post('/push/test', requireAuth, async (req, res) => {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           payload,
-          { TTL: 60 }
+          { TTL: 60, urgency: 'high' }
         );
         sent++;
       } catch (err) {
