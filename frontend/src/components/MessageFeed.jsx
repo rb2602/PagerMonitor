@@ -28,7 +28,7 @@ function FeedHeader() {
   );
 }
 
-export default function MessageFeed({ messages, highlightRules = [], groups = [], onFilter, onMapClick, onLoadMore, loadingMore, noMoreMessages, totalInDb, totalLoaded, onDelete }) {
+export default function MessageFeed({ messages, highlightRules = [], groups = [], onFilter, onMapClick, onLoadMore, loadingMore, noMoreMessages, totalInDb, totalLoaded, onDelete, wsStatus }) {
   // settingsLoaded is true once the /api/site-settings fetch has resolved (success or fail).
   // We must NOT start the badge timer until then — otherwise a slow mobile network causes
   // the timer to fire with the hard-coded default (10 s) before the real configured value
@@ -79,6 +79,16 @@ export default function MessageFeed({ messages, highlightRules = [], groups = []
       el.removeEventListener('touchcancel', onTouchEnd);
     };
   }, []);
+
+  // After WS connects or reconnects, scroll to top so newest messages are visible.
+  // rAF defers until after React flushes, then history prepend keeps us at the top.
+  useEffect(() => {
+    if (wsStatus !== 'open') return;
+    const id = requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [wsStatus]);
 
   // Load user's last-seen from server on mount
   useEffect(() => {

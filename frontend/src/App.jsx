@@ -251,7 +251,8 @@ export default function App() {
               loadingMore={loadingMore} noMoreMessages={noMoreMessages}
               totalInDb={serverStatus?.stats?.total || 0}
               totalLoaded={messages.length}
-              onDelete={removeMessage} />
+              onDelete={removeMessage}
+              wsStatus={wsStatus} />
           </div>
           {/* MapView always mounted so geocoding/state persists across tab switches */}
           <div style={{ position:'absolute', inset:0, display: view === 'map' ? 'block' : 'none' }}>
