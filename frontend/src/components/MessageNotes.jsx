@@ -1,18 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { StickyNote, Lock, Globe, Trash2, Plus, Loader } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useSite } from '../context/SiteContext.jsx';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
 
-function fmtTime(ts) {
+function fmtTime(ts, locale) {
   const d = new Date(ts);
-  return d.toLocaleString('sl-SI', { hour12:false, day:'2-digit', month:'2-digit',
+  return d.toLocaleString(locale, { hour12:false, day:'2-digit', month:'2-digit',
     hour:'2-digit', minute:'2-digit' });
 }
 
 export default function MessageNotes({ messageId, onCountChange }) {
   const { user } = useAuth();
+  const { locale } = useSite();
   const [notes, setNotes]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [text, setText]       = useState('');
@@ -106,7 +108,7 @@ export default function MessageNotes({ messageId, onCountChange }) {
             <div style={{ fontSize:'0.65rem', color:'var(--text-3)', marginTop:'0.15rem',
               fontFamily:'monospace' }}>
               <span style={{ color:'var(--accent-blue)', fontWeight:600 }}>{n.username}</span>
-              {' · '}{fmtTime(n.created_at)}
+              {' · '}{fmtTime(n.created_at, locale)}
               {n.is_private && <span style={{ color:'var(--accent-amber)', marginLeft:'0.3rem' }}>private</span>}
             </div>
           </div>

@@ -316,12 +316,12 @@ function parseCsvLine(line) {
 
 // ── Site settings ─────────────────────────────────────────────────────────────
 router.get('/site-settings', adminOnly, (_req, res) => {
-  try { res.json(_gs('site_settings', { siteName:'PagerMonitor', siteDescription:'Real-time pager decoder', newBadgeSeconds:10, mapDotColor:'#00ff9d', showMapButton:true, mapMaxAgeDays:30, publicMode:false, geocodeCountry:'si' })); }
+  try { res.json(_gs('site_settings', { siteName:'PagerMonitor', siteDescription:'Real-time pager decoder', newBadgeSeconds:10, mapDotColor:'#00ff9d', showMapButton:true, mapMaxAgeDays:30, publicMode:false, geocodeCountry:'si', locale:'sl-SI' })); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.put('/site-settings', adminOnly, (req, res) => {
   try {
-    const { siteName, siteDescription, newBadgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays, publicMode, geocodeCountry } = req.body;
+    const { siteName, siteDescription, newBadgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays, publicMode, geocodeCountry, locale } = req.body;
     _ss('site_settings', {
       siteName: siteName || 'PagerMonitor', siteDescription: siteDescription || '',
       newBadgeSeconds: Math.max(0, Math.min(300, parseInt(newBadgeSeconds,10)||0)),
@@ -329,6 +329,7 @@ router.put('/site-settings', adminOnly, (req, res) => {
       mapMaxAgeDays: Math.max(1/24, Math.min(365, parseFloat(mapMaxAgeDays)||30)),
       publicMode: !!publicMode,
       geocodeCountry: /^[a-z]{2}$/.test(geocodeCountry) ? geocodeCountry : 'si',
+      locale: /^[a-z]{2}-[A-Z]{2}$/.test(locale) ? locale : 'sl-SI',
     });
     addAuditLog(req.session?.username||'admin', 'site.settings', `publicMode=${!!publicMode}`);
     res.json({ ok: true });

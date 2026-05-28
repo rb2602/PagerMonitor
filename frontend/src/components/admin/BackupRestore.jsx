@@ -1,18 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { Download, Upload, RefreshCw, HardDrive, AlertTriangle, CheckCircle, Power, Loader } from 'lucide-react';
+import { useSite } from '../../context/SiteContext.jsx';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
 
-function fmtDate(ts) {
+function fmtDate(ts, locale) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleString('sl-SI', {
+  return new Date(ts).toLocaleString(locale, {
     hour12:false, day:'2-digit', month:'2-digit', year:'numeric',
     hour:'2-digit', minute:'2-digit', second:'2-digit',
   });
 }
 
 function StatusCard({ label, info }) {
+  const { locale } = useSite();
   return (
     <div style={{ background:'var(--bg-0)', border:'1px solid var(--border-soft)',
       borderRadius:'0.5rem', padding:'0.75rem 1rem' }}>
@@ -22,7 +24,7 @@ function StatusCard({ label, info }) {
         <div style={{ fontFamily:'monospace', fontSize:'0.85rem', fontWeight:700,
           color:'var(--accent-green)' }}>{info.sizeHuman}</div>
         <div style={{ fontFamily:'monospace', fontSize:'0.65rem', color:'var(--text-3)',
-          marginTop:'0.2rem' }}>Modified {fmtDate(info.modified)}</div>
+          marginTop:'0.2rem' }}>Modified {fmtDate(info.modified, locale)}</div>
         <div style={{ fontFamily:'monospace', fontSize:'0.6rem', color:'var(--text-3)',
           marginTop:'0.1rem', wordBreak:'break-all' }}>{info.path}</div>
       </>) : (
@@ -33,6 +35,7 @@ function StatusCard({ label, info }) {
 }
 
 export default function BackupRestore() {
+  const { locale } = useSite();
   const [status, setStatus]           = useState(null);
   const [loading, setLoading]         = useState(true);
   const [restoring, setRestoring]     = useState(false);
@@ -123,7 +126,7 @@ export default function BackupRestore() {
       });
       const d = await r.json();
       if (r.ok) {
-        flash('ok', `✓ Restore complete (backup from ${fmtDate(bundle.created)}). Restart the service to apply.`);
+        flash('ok', `✓ Restore complete (backup from ${fmtDate(bundle.created, locale)}). Restart the service to apply.`);
         loadStatus();
       } else {
         flash('err', d.error || 'Restore failed');

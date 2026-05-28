@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Terminal, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import { adminFetchSdrLogs } from '../../utils/api.js';
 import { subscribeWsMessages } from '../../hooks/useWebSocket.js';
+import { useSite } from '../../context/SiteContext.jsx';
 
 const SOURCE_COLORS = {
   rtl_fm: 'var(--accent-blue)',
@@ -11,8 +12,9 @@ const SOURCE_COLORS = {
 };
 
 function LogLine({ entry }) {
+  const { locale } = useSite();
   const color = SOURCE_COLORS[entry.source] || 'var(--text-3)';
-  const ts    = new Date(entry.ts).toLocaleTimeString('sl-SI', { hour12: false });
+  const ts    = new Date(entry.ts).toLocaleTimeString(locale, { hour12: false });
   return (
     <div style={{ display: 'flex', gap: '0.6rem', padding: '0.15rem 0',
       borderBottom: '1px solid color-mix(in srgb, var(--border) 40%, transparent)' }}>

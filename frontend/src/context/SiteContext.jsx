@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
-const DEFAULT = { siteName: 'PagerMonitor', siteDescription: 'Real-time pager decoder', newBadgeSeconds: 10, mapDotColor: '#00ff9d', showMapButton: true, mapMaxAgeDays: 30, publicMode: false, geocodeCountry: 'si' };
+const DEFAULT = { siteName: 'PagerMonitor', siteDescription: 'Real-time pager decoder', newBadgeSeconds: 10, mapDotColor: '#00ff9d', showMapButton: true, mapMaxAgeDays: 30, publicMode: false, geocodeCountry: 'si', locale: 'sl-SI' };
 const BASE    = import.meta.env.VITE_BACKEND_URL || '';
 
 const SiteContext = createContext({ ...DEFAULT, settingsLoaded: false, update: () => {} });
@@ -23,6 +23,7 @@ export function SiteProvider({ children }) {
           mapMaxAgeDays:   Math.max(1/24, parseFloat(d.mapMaxAgeDays) || DEFAULT.mapMaxAgeDays),
           publicMode:      !!d.publicMode,
           geocodeCountry:  /^[a-z]{2}$/.test(d.geocodeCountry) ? d.geocodeCountry : DEFAULT.geocodeCountry,
+          locale:          /^[a-z]{2}-[A-Z]{2}$/.test(d.locale) ? d.locale : DEFAULT.locale,
         };
         setSettings(s);
         document.title = s.siteName;

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Activity, RefreshCw } from 'lucide-react';
+import { useSite } from '../../context/SiteContext.jsx';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
@@ -28,12 +29,12 @@ const ACTION_META = {
   'backup.restore': { label:'Backup restored', color:'var(--accent-amber)' },
 };
 
-function fmtAge(ts) {
+function fmtAge(ts, locale) {
   const sec = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
   if (sec < 60)    return `${sec}s ago`;
   if (sec < 3600)  return `${Math.floor(sec/60)}m ago`;
   if (sec < 86400) return `${Math.floor(sec/3600)}h ago`;
-  return new Date(ts).toLocaleDateString('sl-SI', { day:'2-digit', month:'2-digit' });
+  return new Date(ts).toLocaleDateString(locale, { day:'2-digit', month:'2-digit' });
 }
 
 /**
@@ -43,6 +44,7 @@ function fmtAge(ts) {
  * @param {boolean}  compact  - if true, show as a slim list without title
  */
 export default function ActivityFeed({ filter = '', limit = 10, compact = false }) {
+  const { locale } = useSite();
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -91,7 +93,7 @@ export default function ActivityFeed({ filter = '', limit = 10, compact = false 
             )}
             <span style={{ color:'var(--text-3)', flexShrink:0, fontSize:'0.68rem',
               fontFamily:'monospace', marginLeft:'auto' }}>
-              {r.username} · {fmtAge(r.timestamp)}
+              {r.username} · {fmtAge(r.timestamp, locale)}
             </span>
           </div>
         );
@@ -145,7 +147,7 @@ export default function ActivityFeed({ filter = '', limit = 10, compact = false 
                   </span>
                   <span style={{ fontFamily:'monospace', fontSize:'0.68rem',
                     color:'var(--text-3)', marginLeft:'0.4rem' }}>
-                    {fmtAge(r.timestamp)}
+                    {fmtAge(r.timestamp, locale)}
                   </span>
                 </div>
               </div>

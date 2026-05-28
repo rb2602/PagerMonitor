@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Archive, Save, Play, RefreshCw } from 'lucide-react';
+import { useSite } from '../../context/SiteContext.jsx';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
@@ -22,12 +23,13 @@ function Flash({ msg }) {
   );
 }
 
-function fmtDate(ts) {
+function fmtDate(ts, locale) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleDateString('sl-SI', { day:'numeric', month:'numeric', year:'numeric' });
+  return new Date(ts).toLocaleDateString(locale, { day:'numeric', month:'numeric', year:'numeric' });
 }
 
 export default function ArchiveConfig() {
+  const { locale } = useSite();
   const [cfg, setCfg]       = useState({ enabled: false, afterDays: 30 });
   const [stats, setStats]   = useState(null);
   const [saving, setSaving] = useState(false);
@@ -78,8 +80,8 @@ export default function ArchiveConfig() {
         <div className="pm-card" style={{ marginBottom:'1rem', display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'0.75rem' }}>
           {[
             { label: 'Archived messages', value: stats.total.toLocaleString(), color: 'var(--accent-blue)' },
-            { label: 'Oldest archived',   value: fmtDate(stats.oldest),        color: 'var(--text-2)' },
-            { label: 'Newest archived',   value: fmtDate(stats.newest),        color: 'var(--text-2)' },
+            { label: 'Oldest archived',   value: fmtDate(stats.oldest, locale),        color: 'var(--text-2)' },
+            { label: 'Newest archived',   value: fmtDate(stats.newest, locale),        color: 'var(--text-2)' },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ textAlign:'center' }}>
               <div style={{ fontSize:'1.2rem', fontWeight:700, color, fontFamily:'monospace' }}>{value}</div>

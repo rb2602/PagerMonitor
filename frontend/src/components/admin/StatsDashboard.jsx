@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart2, RefreshCw } from 'lucide-react';
+import { useSite } from '../../context/SiteContext.jsx';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
@@ -19,6 +20,7 @@ function Bar({ value, max, color='var(--accent-green)', label, sublabel, labelWi
 }
 
 export default function StatsDashboard() {
+  const { locale } = useSite();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -49,7 +51,7 @@ export default function StatsDashboard() {
           ? <div style={{color:'var(--text-3)',fontSize:'0.8rem'}}>No messages in last 24 hours</div>
           : stats.hourly.map(r=>(
             <Bar key={r.hour} value={r.n} max={maxHourly}
-              label={new Date(r.hour).toLocaleTimeString('sl-SI',{hour:'2-digit',minute:'2-digit'})}
+              label={new Date(r.hour).toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit'})}
               color='var(--accent-blue)'/>
           ))}
       </div>
@@ -61,7 +63,7 @@ export default function StatsDashboard() {
           ? <div style={{color:'var(--text-3)',fontSize:'0.8rem'}}>No messages in last 30 days</div>
           : stats.daily.map(r=>(
             <Bar key={r.day} value={r.n} max={maxDaily}
-              label={new Date(r.day + 'T12:00:00').toLocaleDateString('sl-SI',{day:'numeric',month:'numeric'})}
+              label={new Date(r.day + 'T12:00:00').toLocaleDateString(locale,{day:'numeric',month:'numeric'})}
               color='var(--accent-green)'/>
           ))}
       </div>

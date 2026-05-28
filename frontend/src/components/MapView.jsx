@@ -7,8 +7,8 @@ import { useSite } from '../context/SiteContext.jsx';
 const TILE_URL  = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const TILE_ATTR = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
-function fmtTime(ts) {
-  return new Date(ts).toLocaleString('sl-SI', { hour12:false,
+function fmtTime(ts, locale) {
+  return new Date(ts).toLocaleString(locale, { hour12:false,
     day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
@@ -31,7 +31,7 @@ function Flash({ msg }) {
 }
 
 export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplete, onLocationResolved, visible }) {
-  const { mapDotColor = '#00ff9d', mapMaxAgeDays = 30, geocodeCountry = 'si' } = useSite();
+  const { mapDotColor = '#00ff9d', mapMaxAgeDays = 30, geocodeCountry = 'si', locale } = useSite();
 
   const mapRef         = useRef(null);
   const mapDivRef      = useRef(null);
@@ -131,7 +131,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     const label = msg.alias_name  || msg.capcode;
     const popup = `<div style="font-family:monospace;font-size:0.8rem;min-width:180px">
       <strong style="color:${color}">${label}</strong><br/>
-      <span style="color:#888;font-size:0.7rem">${msg.capcode} · ${fmtTime(msg.timestamp)}</span><br/>
+      <span style="color:#888;font-size:0.7rem">${msg.capcode} · ${fmtTime(msg.timestamp, locale)}</span><br/>
       <div style="margin-top:4px;word-break:break-word">${msg.message || '(no text)'}</div>
     </div>`;
 
@@ -305,7 +305,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
               <Badge label={msg.group_name} color={msg.group_color || '#a855f7'} />
             </div>
             <div style={{ fontFamily:'monospace', fontSize:'0.7rem', color:'var(--text-3)', marginBottom:'0.2rem' }}>
-              {msg.capcode} · {fmtTime(msg.timestamp)}
+              {msg.capcode} · {fmtTime(msg.timestamp, locale)}
             </div>
             <div style={{ fontFamily:'monospace', fontSize:'0.78rem', color:'var(--text-1)',
               overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>

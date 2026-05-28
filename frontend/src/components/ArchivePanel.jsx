@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Archive, Search, X, RefreshCw, Download } from 'lucide-react';
 import MessageRow from './MessageRow.jsx';
+import { useSite } from '../context/SiteContext.jsx';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
 const authHeaders = () => ({ Authorization: `Bearer ${tok()}` });
 
-function fmtDate(ts) {
+function fmtDate(ts, locale) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleDateString('sl-SI', { day:'numeric', month:'numeric', year:'numeric' });
+  return new Date(ts).toLocaleDateString(locale, { day:'numeric', month:'numeric', year:'numeric' });
 }
 
 export default function ArchivePanel({ highlightRules = [], groups = [] }) {
+  const { locale } = useSite();
   const [query, setQuery]     = useState('');
   const [results, setResults] = useState([]);
   const [stats, setStats]     = useState(null);
@@ -69,7 +71,7 @@ export default function ArchivePanel({ highlightRules = [], groups = [] }) {
 
         {stats && (
           <span style={{ fontFamily:'monospace', fontSize:'0.72rem', color:'var(--text-3)' }}>
-            {stats.total.toLocaleString()} messages · {fmtDate(stats.oldest)} – {fmtDate(stats.newest)}
+            {stats.total.toLocaleString()} messages · {fmtDate(stats.oldest, locale)} – {fmtDate(stats.newest, locale)}
           </span>
         )}
 

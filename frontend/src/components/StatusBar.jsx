@@ -1,5 +1,6 @@
 import { useRef, useLayoutEffect, useState, useEffect } from 'react';
 import { Activity, Wifi, WifiOff, Clock, HardDrive, RefreshCw, GitCommit } from 'lucide-react';
+import { useSite } from '../context/SiteContext.jsx';
 
 function fmtSilent(sec) {
   if (sec < 60)        return `${sec}s ago`;
@@ -9,9 +10,9 @@ function fmtSilent(sec) {
   return 'offline';
 }
 
-function fmt24(ts) {
+function fmt24(ts, locale) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleTimeString('sl-SI', {
+  return new Date(ts).toLocaleTimeString(locale, {
     hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
   });
 }
@@ -30,6 +31,7 @@ function SdrDot({ on, title }) {
 }
 
 function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount, latestSha, onNavigate }) {
+  const { locale } = useSite();
   const sdrRunning  = sdrStatus?.running ?? false;
   const sdrDisabled = serverStatus?.sdrDisabled ?? false;
   const total       = serverStatus?.stats?.total;
@@ -131,7 +133,7 @@ function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount, latestSh
         <span style={{ opacity:0.3 }}>·</span>
         <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem' }}>
           <Clock size={10} />
-          Last: {fmt24(sdrStatus.lastMessage)}
+          Last: {fmt24(sdrStatus.lastMessage, locale)}
         </span>
       </>}
       {sdrStatus?.restarts > 0 && <>
@@ -269,6 +271,7 @@ function MobileTicker({ sdrStatus, serverStatus, wsStatus, messageCount, latestS
 }
 
 function LiveClock() {
+  const { locale } = useSite();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -277,9 +280,9 @@ function LiveClock() {
   return (
     <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem', marginLeft:'auto', color:'var(--text-2)', flexShrink:0 }}>
       <Clock size={10} />
-      {now.toLocaleDateString('sl-SI', { day:'numeric', month:'numeric', year:'numeric' })}
+      {now.toLocaleDateString(locale, { day:'numeric', month:'numeric', year:'numeric' })}
       {' '}
-      {now.toLocaleTimeString('sl-SI', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false })}
+      {now.toLocaleTimeString(locale, { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false })}
     </span>
   );
 }
