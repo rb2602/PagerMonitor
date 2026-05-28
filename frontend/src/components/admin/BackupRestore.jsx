@@ -54,7 +54,9 @@ export default function BackupRestore() {
 
   const download = async (db) => {
     try {
-      const r = await fetch(`${BASE}/admin/backup/download?db=${db}`,
+      const d = new Date(), p = n => String(n).padStart(2, '0');
+      const ts = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
+      const r = await fetch(`${BASE}/admin/backup/download?db=${db}&ts=${ts}`,
         { headers: { Authorization:`Bearer ${tok()}` } });
       if (!r.ok) { flash('err', 'Download failed'); return; }
 

@@ -81,7 +81,7 @@ router.get('/status', requireAdmin, (_req, res) => {
 router.get('/download', requireAdmin, async (req, res) => {
   const which = req.query.db || 'all';
   const tmpDir = os.tmpdir();
-  const ts = localTs();
+  const ts = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/.test(req.query.ts) ? req.query.ts : localTs();
 
   try {
     if (which === 'main' || which === 'all') {
