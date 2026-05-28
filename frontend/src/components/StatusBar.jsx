@@ -280,7 +280,7 @@ function LiveClock() {
   return (
     <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem', marginLeft:'auto', color:'var(--text-2)', flexShrink:0 }}>
       <Clock size={10} />
-      {now.toLocaleDateString(locale, { day:'numeric', month:'numeric', year:'numeric' })}
+      {now.toLocaleDateString(locale, { day:'numeric', month:'numeric', year:'numeric' }).replace(/\s/g, '')}
       {' '}
       {now.toLocaleTimeString(locale, { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false })}
     </span>
