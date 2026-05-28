@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Wifi, WifiOff, Trash2, RefreshCw, Activity, Settings2, ChevronDown, ChevronUp, Save, Download, GitCommit } from 'lucide-react';
 import { useSite } from '../../context/SiteContext.jsx';
+import { normTs } from '../../utils/time.js';
 
 const GITHUB_REPO = 'Dj3ky/PagerMonitor';
 const GITHUB_API  = `https://api.github.com/repos/${GITHUB_REPO}/commits/main`;
@@ -40,12 +41,10 @@ const CFG_FIELDS = [
   { key:'charset',        label:'Charset (-C)',         placeholder:'',         hint:'Set charset: US (default), FR, DE, SE, DK, SI',          group:'mmon' },
 ];
 
-function fmtTime(ts, locale) {
+function fmtTime(ts, locale, hour12) {
   if (!ts) return '—';
-  // SQLite datetime('now') is UTC with no timezone suffix — append Z so JS parses it as UTC
-  const normalized = (ts.includes('T') || ts.endsWith('Z')) ? ts : ts.replace(' ', 'T') + 'Z';
-  return new Date(normalized).toLocaleString(locale, {
-    hour12:false, day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit',
+  return new Date(normTs(ts)).toLocaleString(locale, {
+    hour12, day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit',
   });
 }
 function fmtSilent(sec) {
@@ -68,7 +67,7 @@ function Flash({ msg }) {
 }
 
 function ClientCard({ client, configs, latestSha, onRemove, onSaveConfig, onSendCommand, flash }) {
-  const { locale } = useSite();
+  const { locale, hour12 } = useSite();
   const live = client.liveConfig || {};
   const [expanded, setExpanded] = useState(false);
   const existingCfg = configs.find(c => c.clientId === client.id);
@@ -160,7 +159,7 @@ function ClientCard({ client, configs, latestSha, onRemove, onSaveConfig, onSend
           { label:'Last seen',      value: fmtSilent(client.silentSec), color: client.online ? 'var(--accent-green)' : 'var(--accent-amber)' },
           { label:'Frequency',      value: client.freq || '—', color:'var(--text-2)' },
           { label:'Protocols',      value: client.protocols || '—', color:'var(--text-2)' },
-          { label:'First seen',     value: fmtTime(client.firstSeen, locale), color:'var(--text-3)', span: 2 },
+          { label:'First seen',     value: fmtTime(client.firstSeen, locale, hour12), color:'var(--text-3)', span: 2 },
         ].map(({label, value, color, span}) => (
           <div key={label} style={{ background:'var(--bg-0)', padding:'0.4rem 0.5rem',
             borderRadius:'0.4rem', border:'1px solid var(--border-soft)',
@@ -179,7 +178,7 @@ function ClientCard({ client, configs, latestSha, onRemove, onSaveConfig, onSend
           <span style={{ fontFamily:'monospace', fontSize:'0.75rem', color:'var(--text-1)' }}>{client.lastMessage}</span>
           {client.lastMessageTs && (
             <span style={{ fontFamily:'monospace', fontSize:'0.65rem', color:'var(--text-3)', marginLeft:'0.5rem' }}>
-              · {fmtTime(client.lastMessageTs, locale)}
+              · {fmtTime(client.lastMessageTs, locale, hour12)}
             </span>
           )}
         </div>
@@ -198,7 +197,7 @@ function ClientCard({ client, configs, latestSha, onRemove, onSaveConfig, onSend
           {existingCfg?.version && (
             <div style={{ fontSize:'0.7rem', color:'var(--text-3)', fontFamily:'monospace', marginBottom:'0.5rem' }}>
               Config version: <span style={{ color:'var(--accent-blue)' }}>{existingCfg.version}</span>
-              {' · '}Updated: {fmtTime(existingCfg.updatedAt, locale)}
+              {' · '}Updated: {fmtTime(existingCfg.updatedAt, locale, hour12)}
             </div>
           )}
           {/* rtl_fm settings */}

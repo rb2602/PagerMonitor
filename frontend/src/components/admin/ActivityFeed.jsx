@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Activity, RefreshCw } from 'lucide-react';
 import { useSite } from '../../context/SiteContext.jsx';
+import { normTs } from '../../utils/time.js';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
@@ -30,11 +31,12 @@ const ACTION_META = {
 };
 
 function fmtAge(ts, locale) {
-  const sec = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  const normalized = normTs(ts);
+  const sec = Math.floor((Date.now() - new Date(normalized).getTime()) / 1000);
   if (sec < 60)    return `${sec}s ago`;
   if (sec < 3600)  return `${Math.floor(sec/60)}m ago`;
   if (sec < 86400) return `${Math.floor(sec/3600)}h ago`;
-  return new Date(ts).toLocaleDateString(locale, { day:'2-digit', month:'2-digit' });
+  return new Date(normalized).toLocaleDateString(locale, { day:'2-digit', month:'2-digit' });
 }
 
 /**

@@ -26,6 +26,12 @@ const DB_PATH      = process.env.DB_PATH      || './data/pagermonitor.db';
 const ARCHIVE_PATH = process.env.ARCHIVE_PATH ||
   path.join(path.dirname(path.resolve(DB_PATH)), 'archive.db');
 
+function localTs() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
+}
+
 function fmtSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -75,7 +81,7 @@ router.get('/status', requireAdmin, (_req, res) => {
 router.get('/download', requireAdmin, async (req, res) => {
   const which = req.query.db || 'all';
   const tmpDir = os.tmpdir();
-  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const ts = localTs();
 
   try {
     if (which === 'main' || which === 'all') {
@@ -149,7 +155,7 @@ router.post('/restore', requireAdmin, async (req, res) => {
 
     const mainPath = path.resolve(DB_PATH);
     const archPath = path.resolve(ARCHIVE_PATH);
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ts = localTs();
 
     // Checkpoint WAL so all pending writes are flushed into the main DB file
     try { getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}

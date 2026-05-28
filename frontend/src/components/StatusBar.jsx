@@ -10,10 +10,10 @@ function fmtSilent(sec) {
   return 'offline';
 }
 
-function fmt24(ts, locale) {
+function fmtTime(ts, locale, hour12) {
   if (!ts) return '—';
   return new Date(ts).toLocaleTimeString(locale, {
-    hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+    hour12, hour: '2-digit', minute: '2-digit', second: '2-digit'
   });
 }
 
@@ -31,7 +31,7 @@ function SdrDot({ on, title }) {
 }
 
 function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount, latestSha, onNavigate }) {
-  const { locale } = useSite();
+  const { locale, hour12 } = useSite();
   const sdrRunning  = sdrStatus?.running ?? false;
   const sdrDisabled = serverStatus?.sdrDisabled ?? false;
   const total       = serverStatus?.stats?.total;
@@ -133,7 +133,7 @@ function StatusItems({ sdrStatus, serverStatus, wsStatus, messageCount, latestSh
         <span style={{ opacity:0.3 }}>·</span>
         <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem' }}>
           <Clock size={10} />
-          Last: {fmt24(sdrStatus.lastMessage, locale)}
+          Last: {fmtTime(sdrStatus.lastMessage, locale, hour12)}
         </span>
       </>}
       {sdrStatus?.restarts > 0 && <>
@@ -271,7 +271,7 @@ function MobileTicker({ sdrStatus, serverStatus, wsStatus, messageCount, latestS
 }
 
 function LiveClock() {
-  const { locale } = useSite();
+  const { locale, hour12 } = useSite();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -282,7 +282,7 @@ function LiveClock() {
       <Clock size={10} />
       {now.toLocaleDateString(locale, { day:'numeric', month:'numeric', year:'numeric' }).replace(/\s/g, '')}
       {' '}
-      {now.toLocaleTimeString(locale, { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false })}
+      {now.toLocaleTimeString(locale, { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12 })}
     </span>
   );
 }

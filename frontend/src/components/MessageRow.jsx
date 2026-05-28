@@ -6,8 +6,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 
-function fmtTime(ts, locale) { return new Date(ts).toLocaleTimeString(locale, { hour12:false }); }
-function fmtDate(ts, locale) { return new Date(ts).toLocaleDateString(locale, { day:'2-digit', month:'2-digit', year:'numeric' }); }
+function fmtTime(ts, locale, hour12) { return new Date(ts).toLocaleTimeString(locale, { hour12 }); }
+function fmtDate(ts, locale) { return new Date(ts).toLocaleDateString(locale, { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\s/g, ''); }
 
 // Split text and highlight matching segments
 function highlightSegments(text, rules) {
@@ -63,7 +63,7 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
   const [reGeocoding, setReGeocoding] = useState(false);
   const [geoResult, setGeoResult] = useState(null);
   const [geoError, setGeoError] = useState(null);
-  const { showMapButton = true, locale } = useSite();
+  const { showMapButton = true, locale, hour12 } = useSite();
   const { user, token } = useAuth();
   // Only show map button if message has confirmed stored coordinates in DB
   const hasLocation  = !!(msg.lat && msg.lng);
@@ -115,7 +115,7 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
           {/* Date + Time — two lines */}
           <div style={{ fontFamily:'monospace', flexShrink:0, minWidth:'62px', textAlign:'right', lineHeight:1.3 }}>
             <div style={{ fontSize:'0.65rem', color:'var(--text-2)' }}>{fmtDate(msg.timestamp, locale)}</div>
-            <div style={{ fontSize:'0.72rem', color:'var(--text-2)' }}>{fmtTime(msg.timestamp, locale)}</div>
+            <div style={{ fontSize:'0.72rem', color:'var(--text-2)' }}>{fmtTime(msg.timestamp, locale, hour12)}</div>
           </div>
           {/* Capcode */}
           <span onClick={e => { e.stopPropagation(); onFilter?.('capcode', msg.capcode); }}
@@ -190,7 +190,7 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
           <div style={{ display:'flex', alignItems:'center', gap:'0.4rem' }}>
             <span style={{ fontFamily:'monospace', flexShrink:0, lineHeight:1.3 }}>
               <span style={{ fontSize:'0.62rem', color:'var(--text-2)' }}>{fmtDate(msg.timestamp, locale)} </span>
-              <span style={{ fontSize:'0.7rem', color:'var(--text-2)' }}>{fmtTime(msg.timestamp, locale)}</span>
+              <span style={{ fontSize:'0.7rem', color:'var(--text-2)' }}>{fmtTime(msg.timestamp, locale, hour12)}</span>
             </span>
             <span onClick={e => { e.stopPropagation(); onFilter?.('capcode', msg.capcode); }}
               style={{ fontFamily:'monospace', fontSize:'0.73rem', fontWeight:700,
@@ -256,7 +256,7 @@ export default function MessageRow({ msg, index=0, isNew, highlightRules=[], gro
               <Field label="Capcode"   v={msg.capcode} mono />
               <Field label="Protocol"  v={`${msg.protocol} @ ${msg.baud ?? '?'}bps`} />
               <Field label="Function"  v={msg.funcbits?.toString() ?? '—'} mono />
-              <Field label="Date/Time" v={`${fmtDate(msg.timestamp, locale)} ${fmtTime(msg.timestamp, locale)}`} mono />
+              <Field label="Date/Time" v={`${fmtDate(msg.timestamp, locale)} ${fmtTime(msg.timestamp, locale, hour12)}`} mono />
               {alias     && <Field label="Alias" v={alias} />}
               {groupName && <Field label="Group" v={groupName} />}
               {(geoResult || (msg.lat && msg.lng)) && (

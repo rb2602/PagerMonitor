@@ -25,7 +25,7 @@ function Flash({ msg }) {
 
 function fmtDate(ts, locale) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleDateString(locale, { day:'numeric', month:'numeric', year:'numeric' });
+  return new Date(ts).toLocaleDateString(locale, { day:'numeric', month:'numeric', year:'numeric' }).replace(/\s/g, '');
 }
 
 export default function ArchiveConfig() {

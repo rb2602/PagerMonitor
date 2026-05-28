@@ -20,7 +20,7 @@ function Bar({ value, max, color='var(--accent-green)', label, sublabel, labelWi
 }
 
 export default function StatsDashboard() {
-  const { locale } = useSite();
+  const { locale, hour12 } = useSite();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +51,7 @@ export default function StatsDashboard() {
           ? <div style={{color:'var(--text-3)',fontSize:'0.8rem'}}>No messages in last 24 hours</div>
           : stats.hourly.map(r=>(
             <Bar key={r.hour} value={r.n} max={maxHourly}
-              label={new Date(r.hour).toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit'})}
+              label={new Date(r.hour).toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit',hour12})}
               color='var(--accent-blue)'/>
           ))}
       </div>

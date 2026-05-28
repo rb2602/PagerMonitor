@@ -5,7 +5,7 @@ import { useSite } from '../../context/SiteContext.jsx';
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const getToken = () => localStorage.getItem('pm_token') || '';
 
-const DEFAULTS = { siteName: 'PagerMonitor', siteDescription: 'Real-time pager decoder', newBadgeSeconds: 10, mapDotColor: '#00ff9d', showMapButton: true, mapMaxAgeDays: 30, publicMode: false, geocodeCountry: 'si', locale: 'sl-SI' };
+const DEFAULTS = { siteName: 'PagerMonitor', siteDescription: 'Real-time pager decoder', newBadgeSeconds: 10, mapDotColor: '#00ff9d', showMapButton: true, mapMaxAgeDays: 30, publicMode: false, geocodeCountry: 'si', locale: 'sl-SI', hour12: false };
 
 const LOCALES = [
   { value: 'sl-SI', label: 'sl-SI — Slovenian' },
@@ -65,6 +65,7 @@ export default function SiteSettings() {
   const [mapMaxAgeHours, setMapMaxAgeHours] = useState(DEFAULTS.mapMaxAgeDays * 24); // stored as hours internally
   const [geocodeCountry, setGeocodeCountry] = useState(DEFAULTS.geocodeCountry);
   const [locale, setLocale]                 = useState(DEFAULTS.locale);
+  const [hour12, setHour12]                 = useState(DEFAULTS.hour12);
   const [publicMode, setPublicMode]         = useState(DEFAULTS.publicMode);
   const [savingMap, setSavingMap]       = useState(false);
   const [mapMsg, setMapMsg]             = useState(null);
@@ -93,6 +94,7 @@ export default function SiteSettings() {
         setMapMaxAgeHours(Math.round((d.mapMaxAgeDays ?? DEFAULTS.mapMaxAgeDays) * 24));
         setGeocodeCountry(d.geocodeCountry || DEFAULTS.geocodeCountry);
         setLocale(d.locale || DEFAULTS.locale);
+        setHour12(!!d.hour12);
         setPublicMode(!!d.publicMode);
       })
       .catch(console.warn);
@@ -102,7 +104,7 @@ export default function SiteSettings() {
   const flashBadge = (type, text) => { setBadgeMsg({ type, text }); setTimeout(() => setBadgeMsg(null), 3500); };
   const flashMap   = (type, text) => { setMapMsg({ type, text });   setTimeout(() => setMapMsg(null),   3500); };
 
-  const allSettings = () => ({ ...siteForm, newBadgeSeconds: badgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays: mapMaxAgeHours / 24, geocodeCountry, locale, publicMode });
+  const allSettings = () => ({ ...siteForm, newBadgeSeconds: badgeSeconds, mapDotColor, showMapButton, mapMaxAgeDays: mapMaxAgeHours / 24, geocodeCountry, locale, hour12, publicMode });
 
   // Save site name/description only
   const saveSite = async () => {
@@ -293,7 +295,23 @@ export default function SiteSettings() {
           </select>
           <div style={{ fontSize:'0.72rem', color:'var(--text-3)', marginTop:'0.3rem' }}>
             Controls how dates and times are formatted across the app.
-            Preview: {new Date().toLocaleString(locale, { hour12:false, day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+            Preview: {new Date().toLocaleString(locale, { hour12, day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }).replace(/\s/g, ' ').trim()}
+          </div>
+        </div>
+
+        <div style={{ marginBottom:'1rem' }}>
+          <label className="pm-label">Time format</label>
+          <div style={{ display:'flex', alignItems:'center', gap:'1rem' }}>
+            {[false, true].map(v => (
+              <label key={String(v)} style={{ display:'flex', alignItems:'center', gap:'0.4rem', cursor:'pointer', fontSize:'0.85rem', color:'var(--text-2)' }}>
+                <input type="radio" name="hour12" checked={hour12 === v} onChange={() => setHour12(v)}
+                  style={{ accentColor:'var(--accent-green)' }} />
+                {v ? '12-hour (AM/PM)' : '24-hour'}
+              </label>
+            ))}
+          </div>
+          <div style={{ fontSize:'0.72rem', color:'var(--text-3)', marginTop:'0.3rem' }}>
+            Preview: {new Date().toLocaleTimeString(locale, { hour12, hour:'2-digit', minute:'2-digit', second:'2-digit' })}
           </div>
         </div>
 

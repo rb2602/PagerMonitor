@@ -12,9 +12,9 @@ const SOURCE_COLORS = {
 };
 
 function LogLine({ entry }) {
-  const { locale } = useSite();
+  const { locale, hour12 } = useSite();
   const color = SOURCE_COLORS[entry.source] || 'var(--text-3)';
-  const ts    = new Date(entry.ts).toLocaleTimeString(locale, { hour12: false });
+  const ts    = new Date(entry.ts).toLocaleTimeString(locale, { hour12 });
   return (
     <div style={{ display: 'flex', gap: '0.6rem', padding: '0.15rem 0',
       borderBottom: '1px solid color-mix(in srgb, var(--border) 40%, transparent)' }}>

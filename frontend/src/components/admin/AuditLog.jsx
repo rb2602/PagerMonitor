@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ClipboardList, RefreshCw } from 'lucide-react';
 import { useSite } from '../../context/SiteContext.jsx';
+import { normTs } from '../../utils/time.js';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
 const tok  = () => localStorage.getItem('pm_token') || '';
@@ -29,15 +30,15 @@ const ACTION_META = {
   'backup.restore':  { label:'Backup restored',      color:'var(--accent-amber)' },
 };
 
-function fmtTime(ts, locale) {
-  return new Date(ts).toLocaleString(locale, {
-    hour12: false, day:'2-digit', month:'2-digit', year:'numeric',
+function fmtTime(ts, locale, hour12) {
+  return new Date(normTs(ts)).toLocaleString(locale, {
+    hour12, day:'2-digit', month:'2-digit', year:'numeric',
     hour:'2-digit', minute:'2-digit', second:'2-digit',
   });
 }
 
 export default function AuditLog() {
-  const { locale } = useSite();
+  const { locale, hour12 } = useSite();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -109,7 +110,7 @@ export default function AuditLog() {
                 {/* Full timestamp — pushed to the right */}
                 <span style={{ fontFamily:'monospace', fontSize:'0.68rem',
                   color:'var(--text-3)', flexShrink:0, marginLeft:'auto', whiteSpace:'nowrap' }}>
-                  {fmtTime(r.timestamp, locale)}
+                  {fmtTime(r.timestamp, locale, hour12)}
                 </span>
               </div>
             );
