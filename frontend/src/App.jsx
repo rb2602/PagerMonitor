@@ -129,7 +129,9 @@ export default function App() {
     });
   }, [browserNotif.notify]);
 
-  const [mapFlyTo, setMapFlyTo] = useState(null);
+  const [mapFlyTo, setMapFlyTo]       = useState(null);
+  const [mapResetKey, setMapResetKey] = useState(0);
+  const handleResetMap = useCallback(() => setMapResetKey(k => k + 1), []);
 
   // Click map pin in feed → switch to map view and fly to location
   const handleMapClick = useCallback((msg) => {
@@ -259,7 +261,8 @@ export default function App() {
             <MapView messages={messages} flyToMsg={mapFlyTo}
               visible={view === 'map'}
               onFlyComplete={() => setMapFlyTo(null)}
-              onLocationResolved={handleLocationResolved} />
+              onLocationResolved={handleLocationResolved}
+              resetKey={mapResetKey} />
           </div>
           <div style={{ position:'absolute', inset:0, display: view === 'archive' ? 'flex' : 'none', flexDirection:'column' }}>
             <ArchivePanel highlightRules={highlightRules} groups={groups} />
@@ -275,7 +278,8 @@ export default function App() {
             <AdminPanel sdrStatus={effectiveSdrStatus} serverStatus={serverStatus}
               onRulesChange={setHighlightRules} onGroupsChange={setGroups}
               requestedTab={requestedAdminTab}
-              onTabHandled={() => setRequestedAdminTab(null)} />
+              onTabHandled={() => setRequestedAdminTab(null)}
+              onResetMap={handleResetMap} />
           )}
         </ErrorBoundary>
       </main>

@@ -72,7 +72,7 @@ const TABS = [
   { id:'users',       label:'Users',          icon:<Users size={14}/> },
 ];
 
-function TabContent({ tab, sdrStatus, serverStatus, onRulesChange, onGroupsChange }) {
+function TabContent({ tab, sdrStatus, serverStatus, onRulesChange, onGroupsChange, onResetMap }) {
   switch (tab) {
     case 'sdr':         return <SdrControl sdrStatus={sdrStatus} />;
     case 'system':      return <SystemStats serverStatus={serverStatus} />;
@@ -90,7 +90,7 @@ function TabContent({ tab, sdrStatus, serverStatus, onRulesChange, onGroupsChang
     case 'aliases':     return <AliasManager onGroupsChange={onGroupsChange} />;
     case 'highlights':  return <HighlightRules onRulesChange={onRulesChange} />;
     case 'dedup':       return <DedupConfig />;
-    case 'site':        return <SiteSettings />;
+    case 'site':        return <SiteSettings onResetMap={onResetMap} />;
     case 'client':      return <ClientSettings />;
     case 'sdrclients':  return <SdrClients />;
     case 'users':       return <UsersPanel />;
@@ -104,7 +104,7 @@ function TabContent({ tab, sdrStatus, serverStatus, onRulesChange, onGroupsChang
   }
 }
 
-export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onGroupsChange, requestedTab, onTabHandled }) {
+export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onGroupsChange, requestedTab, onTabHandled, onResetMap }) {
   const { user } = useAuth();
   const sdrDisabled = serverStatus?.sdrDisabled === true;
   const isEditor    = user?.role === 'editor';
@@ -280,7 +280,8 @@ export default function AdminPanel({ sdrStatus, serverStatus, onRulesChange, onG
           <div ref={contentRef} style={{ flex:1, overflow:'hidden auto', padding:'1.25rem', position:'relative' }}>
             <ErrorBoundary key={tab} name={currentTab.label}>
               <TabContent tab={currentTab.id} sdrStatus={sdrStatus} serverStatus={serverStatus}
-                onRulesChange={onRulesChange} onGroupsChange={onGroupsChange} />
+                onRulesChange={onRulesChange} onGroupsChange={onGroupsChange}
+                onResetMap={onResetMap} />
             </ErrorBoundary>
 
             {/* Version footer */}

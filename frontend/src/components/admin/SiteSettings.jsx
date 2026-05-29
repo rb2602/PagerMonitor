@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings2, Save, Clock, Download } from 'lucide-react';
+import { Settings2, Save, Clock, Download, RotateCcw } from 'lucide-react';
 import { useSite } from '../../context/SiteContext.jsx';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || '';
@@ -54,7 +54,7 @@ function Flash({ msg }) {
   );
 }
 
-export default function SiteSettings() {
+export default function SiteSettings({ onResetMap }) {
   const { update: updateSite } = useSite();
 
   // Separate state for each block
@@ -416,6 +416,23 @@ export default function SiteSettings() {
             {mapMaxAgeHours >= 8760 ? '1 year' : mapMaxAgeHours >= 24 ? `${mapMaxAgeHours / 24} day${mapMaxAgeHours !== 24 ? 's' : ''}` : `${mapMaxAgeHours} hour${mapMaxAgeHours !== 1 ? 's' : ''}`}{' '}
             on the map. − / + steps by 1 hour (when &lt; 1 day) or 1 day.
           </div>
+        </div>
+
+        {/* ── Reset map ──────────────────────────────────────── */}
+        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+          <label className="pm-label">Reset map</label>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginBottom: '0.6rem' }}>
+            Clears all markers from the live map. New messages with locations will appear fresh after the reset.
+          </div>
+          <button
+            className="pm-btn"
+            onClick={() => onResetMap?.()}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem',
+              color: 'var(--accent-red)',
+              borderColor: 'color-mix(in srgb, var(--accent-red) 40%, var(--border))' }}>
+            <RotateCcw size={13} />
+            Reset map
+          </button>
         </div>
 
         {/* ── Geo data download ──────────────────────────────── */}

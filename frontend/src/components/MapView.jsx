@@ -30,7 +30,7 @@ function Flash({ msg }) {
     margin:'0.5rem 0.75rem' }}>{msg}</div>;
 }
 
-export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplete, onLocationResolved, visible }) {
+export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplete, onLocationResolved, visible, resetKey }) {
   const { mapDotColor = '#00ff9d', mapMaxAgeDays = 30, geocodeCountry = 'si', locale, hour12 } = useSite();
 
   const mapRef         = useRef(null);
@@ -202,13 +202,37 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
       .finally(() => setLoading(false));
   }, [mapMaxAgeDays]);
 
-  const geocodedRef = useRef(new Set()); // track message IDs already geocoded this session
+  const geocodedRef   = useRef(new Set()); // IDs already geocoded this session
+  const resetIdSetRef = useRef(new Set()); // IDs that existed before last reset
+  const isFirstReset  = useRef(true);
+
+  useEffect(() => {
+    if (isFirstReset.current) { isFirstReset.current = false; return; }
+    // Capture all current marker IDs so the live-messages effect skips them
+    resetIdSetRef.current = new Set(Object.keys(markersRef.current));
+    // Remove all markers from the map
+    Object.values(markersRef.current).forEach(m => {
+      try { mapRef.current?.removeLayer(m); } catch (_) {}
+    });
+    markersRef.current = {};
+    if (clusterRef.current) clusterRef.current.clearLayers();
+    if (heatRef.current) {
+      try { mapRef.current?.removeLayer(heatRef.current); } catch (_) {}
+      heatRef.current = null;
+    }
+    setMapMessages([]);
+    setTotal(0);
+    geocodedRef.current = new Set();
+  }, [resetKey]);
 
   // Watch live messages — geocode any with addresses
   useEffect(() => {
     if (!liveMessages?.length) return;
 
     liveMessages.forEach(msg => {
+      // Skip messages that were on the map before the last reset
+      if (resetIdSetRef.current.has(String(msg.id))) return;
+
       // Already has coords — just add to map if not already there
       if (msg.lat && msg.lng) {
         setMapMessages(prev => {

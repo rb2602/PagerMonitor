@@ -22,6 +22,9 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Claude Code
+.claude/
+
 # Environment files (contain secrets)
 .env
 client/.env
