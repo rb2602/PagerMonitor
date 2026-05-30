@@ -7,7 +7,7 @@ FROM node:20-alpine AS frontend-build
 
 WORKDIR /build
 COPY frontend/package*.json ./
-RUN npm ci --prefer-offline
+RUN npm install
 
 COPY frontend/ ./
 RUN npm run build
@@ -24,7 +24,7 @@ RUN apk add --no-cache wget && rm -rf /var/cache/apk/*
 WORKDIR /app
 
 COPY backend/package*.json ./backend/
-RUN cd backend && npm ci --omit=dev --prefer-offline
+RUN cd backend && npm install --omit=dev
 
 COPY backend/ ./backend/
 COPY --from=frontend-build /build/dist ./frontend/dist
