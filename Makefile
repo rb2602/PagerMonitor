@@ -48,7 +48,8 @@ start: ## Start in single-device mode (SDR dongle on this machine)
 	docker compose up -d --build
 	@echo ""
 	@echo "$(GREEN)✓ Running at http://localhost:$$(grep -E '^PORT' .env 2>/dev/null | cut -d= -f2 || echo 3000)$(RESET)"
-	@echo "  Default login: admin / admin123 (change immediately!)"
+	@echo "  Default login: admin / (see logs for password)"
+	@echo "  Password:      make logs | grep 'Default admin'"
 	@echo "  Logs: make logs"
 
 start-server: ## Start server only (no SDR — for Proxmox/NAS/PC)
