@@ -8,7 +8,7 @@ FROM node:20-alpine AS frontend-build
 WORKDIR /build
 # Copy package files first for better layer caching
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm ci --prefer-offline
 
 COPY frontend/ ./
 RUN npm run build
@@ -32,7 +32,7 @@ WORKDIR /app
 
 # Install backend dependencies first (better caching)
 COPY backend/package*.json ./backend/
-RUN cd backend && npm install --omit=dev
+RUN cd backend && npm ci --omit=dev --prefer-offline
 
 # Copy backend source
 COPY backend/ ./backend/
