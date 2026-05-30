@@ -118,7 +118,7 @@ export default function App() {
   useEffect(() => {
     if (paused && messages.length > 0) setNewCount(n => n + 1);
     else setPage(0);
-  }, [messages]);
+  }, [messages.length]);
 
   // Browser notifications — subscribe directly to raw WS events, not React state.
   // This fires once per live message, regardless of React batching, and never
