@@ -33,6 +33,7 @@ make start
 On first boot (empty database), PagerMonitor generates a random admin password and prints it once to the container log:
 
 ```bash
+cd ~/
 docker logs pagermonitor | grep "Default admin"
 # ⚠  Default admin created  username=admin  password=3f9a1c...
 ```
