@@ -30,8 +30,13 @@ const BBOXES = {
   gb: '49.87,-8.62,60.86,1.77',
   pl: '49.00,14.12,54.84,24.15',
   hu: '45.74,16.11,48.59,22.90',
+  nz: '-47.35,166.43,-34.35,178.55',
+  au: '-43.74,113.34,-10.41,153.64',
+  ca: '41.68,-141.00,83.11,-52.64',
+  us: '24.52,-124.77,49.38,-66.95',
 };
-const BBOX = BBOXES[CC] || BBOXES.si;
+if (!BBOXES[CC]) { console.error(`Unknown country code: ${CC}. Add a bbox to BBOXES or check the code.`); process.exit(1); }
+const BBOX = BBOXES[CC];
 const OUT  = path.join(__dirname, `../data/${CC}_streets.json`);
 
 const QUERY = `[out:json][timeout:120][bbox:${BBOX}];

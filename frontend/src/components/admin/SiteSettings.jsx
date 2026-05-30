@@ -365,7 +365,7 @@ export default function SiteSettings({ onResetMap }) {
               placeholder="si" maxLength={2}
               style={{ width:'60px', textAlign:'center', fontFamily:'monospace', textTransform:'lowercase' }} />
             <span style={{ fontSize:'0.8rem', color:'var(--text-2)' }}>
-              {geocodeCountry === 'si' ? 'Slovenia' : geocodeCountry === 'de' ? 'Germany' : geocodeCountry === 'at' ? 'Austria' : geocodeCountry === 'hr' ? 'Croatia' : geocodeCountry === 'it' ? 'Italy' : geocodeCountry === 'gb' ? 'United Kingdom' : geocodeCountry === 'us' ? 'United States' : geocodeCountry === 'fr' ? 'France' : geocodeCountry.toUpperCase()}
+              {geocodeCountry === 'si' ? 'Slovenia' : geocodeCountry === 'de' ? 'Germany' : geocodeCountry === 'at' ? 'Austria' : geocodeCountry === 'hr' ? 'Croatia' : geocodeCountry === 'it' ? 'Italy' : geocodeCountry === 'gb' ? 'United Kingdom' : geocodeCountry === 'us' ? 'United States' : geocodeCountry === 'fr' ? 'France' : geocodeCountry === 'nz' ? 'New Zealand' : geocodeCountry === 'au' ? 'Australia' : geocodeCountry === 'ca' ? 'Canada' : geocodeCountry.toUpperCase()}
             </span>
           </div>
           <div style={{ fontSize:'0.72rem', color:'var(--text-3)', marginTop:'0.3rem' }}>
