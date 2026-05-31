@@ -367,7 +367,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
           width:'260px', flexShrink:0, display:'flex', flexDirection:'column',
           background:'var(--bg-1)', borderRight:'1px solid var(--border)', overflow:'hidden',
         }}>
-          <SidebarContent />
+          {SidebarContent()}
         </div>
 
         {/* ── Map ──────────────────────────────────────────────── */}
@@ -427,7 +427,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
             background:'var(--bg-1)', borderRight:'1px solid var(--border)',
             boxShadow:'4px 0 16px rgba(0,0,0,0.4)',
           }}>
-            <SidebarContent />
+            {SidebarContent()}
           </div>
         )}
 
