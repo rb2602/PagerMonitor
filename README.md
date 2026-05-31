@@ -60,8 +60,22 @@ Configure under **Admin → Messages → Feed Filter**. Changes take effect imme
 - Three modes: **individual pins** · **clustered** · **heatmap**
 - Fly-to animation when clicking the map button on any message row
 - **Re-geocode** button on every message — retries address extraction and pins the result on the map
+- **Delete location** — remove a coordinate pin directly from the map popup
+- **Reset Map** button — clears all current pins from the map without reloading the page
 
-### 🤖 AI-assisted geocoding (optional)
+### 🌍 Geocoding (address → GPS)
+
+#### Geocoder backend
+Converts extracted addresses into GPS coordinates. Two backends are available:
+
+| Backend | Cost | Notes |
+|---|---|---|
+| **Nominatim** | Free / no key | Default — OpenStreetMap data; good global coverage |
+| **HERE** | Free 250k/month | Better house-number accuracy, especially for NZ, AU, and countries with sparse OSM data |
+
+Configure under **Admin → Site → AI Geocode → Geocoder backend**. For HERE, generate a free API key at [developer.here.com](https://developer.here.com) (no credit card required) and paste it in the UI, or set `HERE_API_KEY=…` in your `.env`.
+
+#### AI-assisted geocoding (optional)
 When enabled, the raw pager message text is sent to an AI model to extract the street, house number, and settlement **before** falling back to the built-in regex pipeline — useful for unusual or abbreviated address formats that regex misses.
 
 | Provider | Cost | Notes |
@@ -71,6 +85,11 @@ When enabled, the raw pager message text is sent to an AI model to extract the s
 | **Ollama** | Free / local | Runs on the same Raspberry Pi; no internet required. Llama 3.2 1B fits in 2 GB RAM |
 
 Configure under **Admin → Site → AI Geocode**. API keys are stored server-side and never sent to the browser. Disabling AI falls back silently to the regex pipeline with no data loss.
+
+### 🔧 Message normalizations
+Define regex find-and-replace rules that are applied to every decoded message **before** it is stored or geocoded. Useful for stripping noise, fixing encoding artefacts, or standardising abbreviations across your feed. Includes a live preview so you can test a rule against sample text before saving.
+
+Configure under **Admin → Messages → Message Normalizations**.
 
 ### 📋 Aliases & groups
 - Give capcodes friendly names: `1234567` → `Fire Station Alpha`
@@ -127,11 +146,11 @@ Run **multiple RTL-SDR dongles in parallel** — each on its own frequency, prot
 | Group | Tabs |
 |---|---|
 | **SDR** | SDR Control (start/stop/restart) · Dead Air detection · Live log viewer · SDR Clients dashboard · Client Key |
-| **Messages** | Database tools (purge, export) · Archive config · Statistics dashboard · Dedup · Highlight rules · Keyword alerts · **Feed Filter** |
+| **Messages** | Database tools (purge, export) · Archive config · Statistics dashboard · Dedup · Highlight rules · Keyword alerts · **Feed Filter** · **Message Normalizations** |
 | **Notifications** | Services (Discord / Telegram / Gotify / Pushover / MQTT) · Webhooks · Email (SMTP) · User notification preferences |
 | **Aliases & Groups** | Group manager · Alias manager (with CSV import/export) |
 | **System** | System stats · **One-click update** · Backup & Restore · Audit log |
-| **Site** | Site settings · **AI Geocode** (Groq / OpenAI / Ollama) · User management |
+| **Site** | Site settings · **AI Geocode** (Nominatim / HERE · Groq / OpenAI / Ollama) · User management |
 
 ---
 
