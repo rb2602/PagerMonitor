@@ -82,6 +82,16 @@ router.get('/system', adminOnly, (_req, res) => {
 });
 
 // ── DB tools ──────────────────────────────────────────────────────────────────
+// Clear all location data (lat/lng) from messages without deleting the messages
+router.delete('/map/locations', adminOnly, (req, res) => {
+  try {
+    const result = getDb().prepare('UPDATE messages SET lat=NULL, lng=NULL WHERE lat IS NOT NULL OR lng IS NOT NULL').run();
+    require('../services/websocket').broadcast({ type: 'map_locations_cleared' });
+    addAuditLog(req.session?.username||'admin', 'map.clear_locations', `cleared=${result.changes}`);
+    res.json({ ok: true, cleared: result.changes });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.delete('/db/purge/all', adminOnly, (req, res) => {
   try {
     const db = getDb();

@@ -118,6 +118,8 @@ export function useWebSocket(backendUrl) {
           setMessages(prev => prev.map(m =>
             m.id === data.id ? { ...m, lat: null, lng: null } : m
           ));
+        } else if (data.type === 'map_locations_cleared') {
+          setMessages(prev => prev.map(m => ({ ...m, lat: null, lng: null })));
         } else if (data.type === 'dead_air') {
           setSdrStatus(s => ({ ...s,
             deadAir:        data.state,

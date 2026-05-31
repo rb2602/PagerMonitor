@@ -56,6 +56,8 @@ function Flash({ msg }) {
 
 export default function SiteSettings({ onResetMap }) {
   const { update: updateSite } = useSite();
+  const [resettingMap,  setResettingMap]  = useState(false);
+  const [mapResetDone,  setMapResetDone]  = useState(false);
 
   // Separate state for each block
   const [siteForm, setSiteForm]         = useState({ siteName: DEFAULTS.siteName, siteDescription: DEFAULTS.siteDescription });
@@ -422,17 +424,40 @@ export default function SiteSettings({ onResetMap }) {
         <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
           <label className="pm-label">Reset map</label>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginBottom: '0.6rem' }}>
-            Clears all markers from the live map. New messages with locations will appear fresh after the reset.
+            Removes all saved coordinates from the database and clears the map.
+            Messages are kept — only their location data is deleted. New messages will be geocoded fresh.
           </div>
-          <button
-            className="pm-btn"
-            onClick={() => onResetMap?.()}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem',
-              color: 'var(--accent-red)',
-              borderColor: 'color-mix(in srgb, var(--accent-red) 40%, var(--border))' }}>
-            <RotateCcw size={13} />
-            Reset map
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              className="pm-btn"
+              disabled={resettingMap}
+              onClick={async () => {
+                if (!confirm('Delete all location data from the database?\n\nThis removes coordinates from every message. The messages themselves are kept. This cannot be undone.')) return;
+                setResettingMap(true);
+                setMapResetDone(false);
+                try {
+                  await fetch(`${BASE}/admin/map/locations`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${getToken()}` },
+                  });
+                  onResetMap?.();
+                  setMapResetDone(true);
+                  setTimeout(() => setMapResetDone(false), 6000);
+                } catch (_) {}
+                finally { setResettingMap(false); }
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem',
+                color: 'var(--accent-red)',
+                borderColor: 'color-mix(in srgb, var(--accent-red) 40%, var(--border))' }}>
+              <RotateCcw size={13} style={{ animation: resettingMap ? 'spin 1s linear infinite' : 'none' }} />
+              {resettingMap ? 'Clearing…' : 'Reset map'}
+            </button>
+            {mapResetDone && (
+              <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: 'var(--accent-green)' }}>
+                ✓ All location data cleared
+              </span>
+            )}
+          </div>
         </div>
 
         {/* ── Geo data download ──────────────────────────────── */}

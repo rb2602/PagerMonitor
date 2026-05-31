@@ -200,16 +200,8 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     onFlyComplete?.();
   }, [flyToMsg]);
   // Persist reset timestamp so the filter survives page refreshes.
-  // Cleared when the user explicitly changes the age filter (mapMaxAgeDays effect).
-  const resetTsRef = useRef(parseInt(localStorage.getItem('pm_map_reset_ts') || '0', 10));
-  const afterReset = (msg) => !resetTsRef.current || new Date(msg.timestamp).getTime() > resetTsRef.current;
-
   useEffect(() => {
     setLoading(true);
-    // Changing the age filter clears the reset so users get a full fresh load.
-    resetTsRef.current = 0;
-    localStorage.removeItem('pm_map_reset_ts');
-
     Object.values(markersRef.current).forEach(m => {
       try { mapRef.current?.removeLayer(m); } catch (_) {}
     });
@@ -220,7 +212,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
 
     fetchMap(500, mapMaxAgeDays)
       .then(rows => {
-        const arr = (Array.isArray(rows) ? rows : []).filter(afterReset);
+        const arr = Array.isArray(rows) ? rows : [];
         setMapMessages(arr); setTotal(arr.length);
         arr.forEach(addMarker);
       })
@@ -228,16 +220,9 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
       .finally(() => setLoading(false));
   }, [mapMaxAgeDays]);
 
-  const geocodedRef  = useRef(new Set()); // IDs already geocoded this session
-  const isFirstReset = useRef(true);
+  const geocodedRef = useRef(new Set()); // IDs already geocoded this session
 
   useEffect(() => {
-    if (isFirstReset.current) { isFirstReset.current = false; return; }
-    // Save reset timestamp — survives page refreshes
-    const now = Date.now();
-    resetTsRef.current = now;
-    localStorage.setItem('pm_map_reset_ts', String(now));
-
     Object.values(markersRef.current).forEach(m => {
       try { mapRef.current?.removeLayer(m); } catch (_) {}
     });
@@ -257,8 +242,6 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     if (!liveMessages?.length) return;
 
     liveMessages.forEach(msg => {
-      // Skip messages that arrived before the last reset
-      if (!afterReset(msg)) return;
 
       // Already has coords — just add to map if not already there
       if (msg.lat && msg.lng) {
