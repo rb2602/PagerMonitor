@@ -135,7 +135,6 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     setMapMessages(prev => prev.filter(m => m.id !== id));
     setTotal(t => Math.max(0, t - 1));
     setSelected(s => s?.id === id ? null : s);
-    resetIdSetRef.current.delete(String(id));
   }, []);
 
   useEffect(() => {
@@ -200,9 +199,17 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     flyTo(flyToMsg);
     onFlyComplete?.();
   }, [flyToMsg]);
+  // Persist reset timestamp so the filter survives page refreshes.
+  // Cleared when the user explicitly changes the age filter (mapMaxAgeDays effect).
+  const resetTsRef = useRef(parseInt(localStorage.getItem('pm_map_reset_ts') || '0', 10));
+  const afterReset = (msg) => !resetTsRef.current || new Date(msg.timestamp).getTime() > resetTsRef.current;
+
   useEffect(() => {
     setLoading(true);
-    // Clear existing markers when re-fetching with new age filter
+    // Changing the age filter clears the reset so users get a full fresh load.
+    resetTsRef.current = 0;
+    localStorage.removeItem('pm_map_reset_ts');
+
     Object.values(markersRef.current).forEach(m => {
       try { mapRef.current?.removeLayer(m); } catch (_) {}
     });
@@ -213,7 +220,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
 
     fetchMap(500, mapMaxAgeDays)
       .then(rows => {
-        const arr = Array.isArray(rows) ? rows : [];
+        const arr = (Array.isArray(rows) ? rows : []).filter(afterReset);
         setMapMessages(arr); setTotal(arr.length);
         arr.forEach(addMarker);
       })
@@ -221,15 +228,16 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
       .finally(() => setLoading(false));
   }, [mapMaxAgeDays]);
 
-  const geocodedRef   = useRef(new Set()); // IDs already geocoded this session
-  const resetIdSetRef = useRef(new Set()); // IDs that existed before last reset
-  const isFirstReset  = useRef(true);
+  const geocodedRef  = useRef(new Set()); // IDs already geocoded this session
+  const isFirstReset = useRef(true);
 
   useEffect(() => {
     if (isFirstReset.current) { isFirstReset.current = false; return; }
-    // Capture all current marker IDs so the live-messages effect skips them
-    resetIdSetRef.current = new Set(Object.keys(markersRef.current));
-    // Remove all markers from the map
+    // Save reset timestamp — survives page refreshes
+    const now = Date.now();
+    resetTsRef.current = now;
+    localStorage.setItem('pm_map_reset_ts', String(now));
+
     Object.values(markersRef.current).forEach(m => {
       try { mapRef.current?.removeLayer(m); } catch (_) {}
     });
@@ -249,8 +257,8 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     if (!liveMessages?.length) return;
 
     liveMessages.forEach(msg => {
-      // Skip messages that were on the map before the last reset
-      if (resetIdSetRef.current.has(String(msg.id))) return;
+      // Skip messages that arrived before the last reset
+      if (!afterReset(msg)) return;
 
       // Already has coords — just add to map if not already there
       if (msg.lat && msg.lng) {
