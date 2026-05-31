@@ -10,7 +10,24 @@ function initDb() {
   const dir = path.dirname(path.resolve(DB_PATH));
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-  db = new Database(path.resolve(DB_PATH));
+  try {
+    db = new Database(path.resolve(DB_PATH));
+  } catch (e) {
+    if (e.code === 'SQLITE_CORRUPT') {
+      const dbFile = path.resolve(DB_PATH);
+      const backups = fs.existsSync(dir)
+        ? fs.readdirSync(dir).filter(f => f.startsWith(path.basename(dbFile) + '.pre-restore-')).sort().reverse()
+        : [];
+      if (backups.length > 0) {
+        const latest = path.join(dir, backups[0]);
+        logger.error(`Database is corrupt. A pre-restore backup was found: ${latest}`);
+        logger.error(`To recover, run:\n  cp "${latest}" "${dbFile}"\n  sudo systemctl restart pagermonitor`);
+      } else {
+        logger.error('Database is corrupt and no pre-restore backup was found. Delete the database file to start fresh.');
+      }
+    }
+    throw e;
+  }
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');

@@ -174,16 +174,52 @@ router.post('/restore', requireAdmin, async (req, res) => {
       fs.copyFileSync(mainPath, `${mainPath}.pre-restore-${ts}`);
     }
 
-    // Write restored main DB
+    // Decode and verify the main DB before replacing the live file
     const mainBuf = Buffer.from(bundle.main, 'base64');
-    fs.writeFileSync(mainPath, mainBuf);
-    logger.info(`Restore: wrote main DB (${mainBuf.length} bytes)`);
+    const tmpMain = `${mainPath}.restore-tmp`;
+    fs.writeFileSync(tmpMain, mainBuf);
+    try {
+      const BetterSqlite3 = require('better-sqlite3');
+      const testDb = new BetterSqlite3(tmpMain, { readonly: true });
+      let integrityOk = false;
+      try {
+        const rows = testDb.pragma('integrity_check');
+        integrityOk = rows.length > 0 && rows[0].integrity_check === 'ok';
+      } finally {
+        testDb.close();
+      }
+      if (!integrityOk) throw new Error('Restored database failed integrity check — backup file may be corrupt');
+    } catch (verifyErr) {
+      fs.unlink(tmpMain, () => {});
+      // Remove the pre-restore copy we just made so we don't leave clutter
+      try { fs.unlinkSync(`${mainPath}.pre-restore-${ts}`); } catch (_) {}
+      throw verifyErr;
+    }
+    fs.renameSync(tmpMain, mainPath);
+    logger.info(`Restore: wrote main DB (${mainBuf.length} bytes, integrity OK)`);
 
-    // Write restored archive DB if present
+    // Decode and verify archive DB if present
     if (bundle.archive) {
       const archBuf = Buffer.from(bundle.archive, 'base64');
-      fs.writeFileSync(archPath, archBuf);
-      logger.info(`Restore: wrote archive DB (${archBuf.length} bytes)`);
+      const tmpArch = `${archPath}.restore-tmp`;
+      fs.writeFileSync(tmpArch, archBuf);
+      try {
+        const BetterSqlite3 = require('better-sqlite3');
+        const testDb = new BetterSqlite3(tmpArch, { readonly: true });
+        let integrityOk = false;
+        try {
+          const rows = testDb.pragma('integrity_check');
+          integrityOk = rows.length > 0 && rows[0].integrity_check === 'ok';
+        } finally {
+          testDb.close();
+        }
+        if (!integrityOk) throw new Error('Restored archive database failed integrity check');
+      } catch (verifyErr) {
+        fs.unlink(tmpArch, () => {});
+        throw verifyErr;
+      }
+      fs.renameSync(tmpArch, archPath);
+      logger.info(`Restore: wrote archive DB (${archBuf.length} bytes, integrity OK)`);
     }
 
     addAuditLog(req.session.username, 'backup.restore', `from backup created ${bundle.created}`);
