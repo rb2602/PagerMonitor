@@ -165,10 +165,33 @@ PORT=3001
 make restart
 ```
 
-**RTL-SDR permission error:**
+**RTL-SDR: `usb_open error -3` (permission denied):**
+
+The container can see the dongle but can't open it. Fix on the host:
+
 ```bash
-# Add udev rule on host
-echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", MODE="0666"' \
-  | sudo tee /etc/udev/rules.d/rtl-sdr.rules
+# 1. Create a udev rule
+echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE="0666", GROUP="plugdev"' \
+  | sudo tee /usr/lib/udev/rules.d/20-rtlsdr.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# 2. Find the plugdev group ID
+getent group plugdev   # e.g. plugdev:x:46:pi
+```
+
+Then add these two lines to the `pagermonitor` service in `docker-compose.yml`:
+
+```yaml
+privileged: true
+user: "node:46"   # replace 46 with your actual plugdev GID
+```
+
+**RTL-SDR: `usb_open error -4` (no device / not accessible):**
+
+The host kernel's built-in DVB driver has claimed the dongle before rtl_fm can open it. Blacklist it on the host, then replug the dongle and restart the container:
+
+```bash
+echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/blacklist-rtlsdr.conf
+sudo rmmod dvb_usb_rtl28xxu          # unload immediately (no reboot needed)
+sudo update-initramfs -u             # persist across reboots (Debian/Ubuntu/RPiOS)
 ```

@@ -45,6 +45,26 @@ services:
     devices:
       # RTL-SDR dongle — comment out if not connected
       - /dev/bus/usb:/dev/bus/usb
+    # ── USB / RTL-SDR troubleshooting ────────────────────────────────────────
+    # If rtl_fm fails to open the device, check the error code:
+    #
+    # usb_open error -3  (LIBUSB_ERROR_ACCESS — permission denied)
+    #   1. Create udev rules on the HOST:
+    #        echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE="0666", GROUP="plugdev"' \
+    #             | sudo tee /usr/lib/udev/rules.d/20-rtlsdr.rules
+    #        sudo udevadm control --reload-rules && sudo udevadm trigger
+    #   2. Find the plugdev GID:  getent group plugdev   (commonly 46 on Raspberry Pi)
+    #   3. Add to this service:
+    #        privileged: true
+    #        user: "node:<plugdev-gid>"   # e.g. user: "node:46"
+    #
+    # usb_open error -4  (LIBUSB_ERROR_NO_DEVICE — device not accessible)
+    #   The host kernel's DVB driver has claimed the dongle before rtl_fm can open it.
+    #   Blacklist it on the HOST, then replug the dongle and restart the container:
+    #        echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/blacklist-rtlsdr.conf
+    #        sudo rmmod dvb_usb_rtl28xxu   # unload without rebooting
+    #        sudo update-initramfs -u      # persist across reboots (Debian/Ubuntu/RPiOS)
+    # ─────────────────────────────────────────────────────────────────────────
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 30s
