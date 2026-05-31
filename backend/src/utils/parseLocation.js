@@ -13,7 +13,8 @@ const COUNTRY_NAMES = {
 const LABELED_ADDR_RE = /(?:Flat\/Unit|Unit\/Flat|Flat|Unit|Address|Location)\s*:\s*(.+)/i;
 
 // ── Coordinate patterns ───────────────────────────────────────────────────────
-const DECIMAL_RE = /(-?\d{1,3}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/;
+const DECIMAL_RE       = /(-?\d{1,3}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/;
+const DECIMAL_SPACE_RE = /(-?\d{1,3}\.\d{5,})\s+(-?\d{1,3}\.\d{5,})/; // space-separated, e.g. "46.080259 14.477292"
 const LAT_LON_RE = /LAT[=:]\s*(-?\d+\.?\d*)\s+LON[=:]\s*(-?\d+\.?\d*)/i;
 const NSEW_RE    = /([NS])\s*(\d+\.\d+)\s+([EW])\s*(\d+\.\d+)/i;
 const DMS_RE     = /(\d+)°(\d+)'(\d+(?:\.\d+)?)"([NS])\s+(\d+)°(\d+)'(\d+(?:\.\d+)?)"([EW])/i;
@@ -413,6 +414,9 @@ function parseLocation(text, countryCode = 'si') {
   if (!text) return { lat: null, lng: null };
 
   let m = DECIMAL_RE.exec(text);
+  if (m) { const lat = parseFloat(m[1]), lng = parseFloat(m[2]); if (valid(lat, lng)) return { lat, lng }; }
+
+  m = DECIMAL_SPACE_RE.exec(text);
   if (m) { const lat = parseFloat(m[1]), lng = parseFloat(m[2]); if (valid(lat, lng)) return { lat, lng }; }
 
   m = LAT_LON_RE.exec(text);
