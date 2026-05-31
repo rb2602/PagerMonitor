@@ -203,7 +203,7 @@ function ClientCard({ client, configs, latestSha, onRemove, onSaveConfig, onSend
           {/* rtl_fm settings */}
           <div style={{ fontSize:'0.68rem', fontWeight:600, color:'var(--text-3)',
             textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.35rem' }}>
-            rtl_fm
+            rtl_fm settings
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.5rem', marginBottom:'0.65rem' }}>
             {CFG_FIELDS.filter(f => f.group === 'rtl').map(f => (
@@ -223,7 +223,7 @@ function ClientCard({ client, configs, latestSha, onRemove, onSaveConfig, onSend
           {/* multimon-ng settings */}
           <div style={{ fontSize:'0.68rem', fontWeight:600, color:'var(--text-3)',
             textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.35rem' }}>
-            multimon-ng
+            multimon-ng settings
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.5rem', marginBottom:'0.75rem' }}>
             {CFG_FIELDS.filter(f => f.group === 'mmon').map(f => (

@@ -332,7 +332,7 @@ export default function SdrControl({ sdrStatus }) {
                     {/* rtl_fm settings */}
                     <div style={{ fontSize:'0.68rem', fontWeight:600, color:'var(--text-3)',
                       textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.35rem' }}>
-                      rtl_fm
+                      rtl_fm settings
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.4rem',
                       marginBottom:'0.65rem' }}>
@@ -352,7 +352,7 @@ export default function SdrControl({ sdrStatus }) {
                     {/* multimon-ng settings */}
                     <div style={{ fontSize:'0.68rem', fontWeight:600, color:'var(--text-3)',
                       textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.35rem' }}>
-                      multimon-ng
+                      multimon-ng settings
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.4rem' }}>
                       {DONGLE_FIELDS.filter(f => f.group === 'mmon').map(f => (
