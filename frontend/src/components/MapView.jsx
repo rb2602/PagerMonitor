@@ -114,7 +114,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
   useEffect(() => {
     if (!visible || !mapRef.current) return;
     mapRef.current.invalidateSize();
-    fetchMap(500, mapMaxAgeDays)
+    fetchMap(2000, mapMaxAgeDays)
       .then(rows => {
         if (!Array.isArray(rows)) return;
         rows.forEach(msg => {
@@ -225,7 +225,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     setMapMessages([]);
     setTotal(0);
 
-    fetchMap(500, mapMaxAgeDays)
+    fetchMap(2000, mapMaxAgeDays)
       .then(rows => {
         const arr = Array.isArray(rows) ? rows : [];
         setMapMessages(arr); setTotal(arr.length);
