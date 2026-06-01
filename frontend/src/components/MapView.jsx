@@ -45,9 +45,13 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
   const [total,       setTotal]       = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [layerMode,   setLayerMode]   = useState('markers'); // 'markers' | 'cluster' | 'heat'
+  const [dateFrom,    setDateFrom]    = useState('');
+  const [dateTo,      setDateTo]      = useState('');
 
   const [mapReady, setMapReady] = useState(false);
   const pendingFlyRef = useRef(null);
+  // Ref so the visible top-up effect always reads current fetch params without stale closure
+  const fetchParamsRef = useRef({ mapMaxAgeDays, dateFrom: '', dateTo: '' });
 
   // Init Leaflet map
   useEffect(() => {
@@ -109,12 +113,17 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     }
   }, [layerMode, mapReady, mapMessages]);
 
-  // When map tab becomes visible, invalidate Leaflet size and top-up any
-  // coordinates that were saved to DB after the initial fetch
+  // Keep ref in sync so the visible top-up always uses current params
+  useEffect(() => {
+    fetchParamsRef.current = { mapMaxAgeDays, dateFrom, dateTo };
+  }, [mapMaxAgeDays, dateFrom, dateTo]);
+
+  // When map tab becomes visible, top-up any coordinates saved after the last fetch
   useEffect(() => {
     if (!visible || !mapRef.current) return;
     mapRef.current.invalidateSize();
-    fetchMap(2000, mapMaxAgeDays)
+    const { mapMaxAgeDays: mad, dateFrom: df, dateTo: dt } = fetchParamsRef.current;
+    fetchMap(10000, mad, df || null, dt || null)
       .then(rows => {
         if (!Array.isArray(rows)) return;
         rows.forEach(msg => {
@@ -214,7 +223,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     flyTo(flyToMsg);
     onFlyComplete?.();
   }, [flyToMsg]);
-  // Persist reset timestamp so the filter survives page refreshes.
+  // Full reset + fetch whenever admin setting OR date picker changes
   useEffect(() => {
     setLoading(true);
     Object.values(markersRef.current).forEach(m => {
@@ -225,7 +234,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     setMapMessages([]);
     setTotal(0);
 
-    fetchMap(2000, mapMaxAgeDays)
+    fetchMap(10000, mapMaxAgeDays, dateFrom || null, dateTo || null)
       .then(rows => {
         const arr = Array.isArray(rows) ? rows : [];
         setMapMessages(arr); setTotal(arr.length);
@@ -233,7 +242,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
       })
       .catch(console.warn)
       .finally(() => setLoading(false));
-  }, [mapMaxAgeDays]);
+  }, [mapMaxAgeDays, dateFrom, dateTo]);
 
   const geocodedRef = useRef(new Set()); // IDs already geocoded this session
 
@@ -333,6 +342,28 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
           {geocoding && <span style={{ color:'var(--accent-amber)' }}>geocoding…</span>}
           {loading   && <span>loading…</span>}
         </div>
+      </div>
+      {/* Date range picker */}
+      <div style={{ padding:'0.4rem 0.5rem', borderBottom:'1px solid var(--border)',
+        display:'flex', alignItems:'center', gap:'0.3rem', flexWrap:'wrap' }}>
+        <input type="date" value={dateFrom} max={dateTo || new Date().toISOString().slice(0,10)}
+          onChange={e => setDateFrom(e.target.value)}
+          style={{ flex:1, minWidth:0, fontSize:'0.7rem', fontFamily:'monospace', padding:'0.2rem 0.3rem',
+            background:'var(--bg-2)', color:'var(--text-1)', border:'1px solid var(--border)',
+            borderRadius:'0.3rem', colorScheme:'dark' }} />
+        <span style={{ color:'var(--text-3)', fontSize:'0.7rem', flexShrink:0 }}>→</span>
+        <input type="date" value={dateTo} min={dateFrom || undefined} max={new Date().toISOString().slice(0,10)}
+          onChange={e => setDateTo(e.target.value)}
+          style={{ flex:1, minWidth:0, fontSize:'0.7rem', fontFamily:'monospace', padding:'0.2rem 0.3rem',
+            background:'var(--bg-2)', color:'var(--text-1)', border:'1px solid var(--border)',
+            borderRadius:'0.3rem', colorScheme:'dark' }} />
+        {(dateFrom || dateTo) && (
+          <button onClick={() => { setDateFrom(''); setDateTo(''); }}
+            title="Reset to default range"
+            style={{ flexShrink:0, fontSize:'0.7rem', padding:'0.2rem 0.4rem', borderRadius:'0.3rem',
+              background:'transparent', border:'1px solid var(--border)', color:'var(--text-2)',
+              cursor:'pointer', fontFamily:'monospace', lineHeight:1 }}>×</button>
+        )}
       </div>
       <div style={{ flex:1, overflowY:'auto' }}>
         {mapMessages.length === 0 && !loading ? (

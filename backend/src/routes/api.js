@@ -100,19 +100,38 @@ router.get('/feed-filter', requireAuth, (_req, res) => {
 // Messages with coordinates for the map view
 router.get('/map', requireAuth, (req, res) => {
   try {
-    const limit      = Math.min(parseInt(req.query.limit || '500', 10), 2000);
+    const limit      = Math.min(parseInt(req.query.limit || '10000', 10), 10000);
+    const fromDate   = req.query.fromDate; // YYYY-MM-DD
+    const toDate     = req.query.toDate;   // YYYY-MM-DD
     const maxAgeDays = parseFloat(req.query.maxAgeDays || '30');
-    const rows = getDb().prepare(`
-      SELECT m.id, m.timestamp, m.capcode, m.message, m.protocol, m.lat, m.lng,
-             a.name as alias_name, a.color as alias_color,
-             g.name as group_name, g.color as group_color
-      FROM messages m
-      LEFT JOIN aliases a ON a.capcode = m.capcode
-      LEFT JOIN groups  g ON g.id = a.group_id
-      WHERE m.lat IS NOT NULL AND m.lng IS NOT NULL
-        AND m.timestamp >= strftime('%Y-%m-%dT%H:%M:%S.000Z', datetime('now', '-' || ? || ' days'))
-      ORDER BY m.id DESC LIMIT ?
-    `).all(maxAgeDays, limit);
+
+    let rows;
+    if (fromDate && toDate) {
+      // SUBSTR(timestamp,1,10) gives YYYY-MM-DD regardless of full timestamp format
+      rows = getDb().prepare(`
+        SELECT m.id, m.timestamp, m.capcode, m.message, m.protocol, m.lat, m.lng,
+               a.name as alias_name, a.color as alias_color,
+               g.name as group_name, g.color as group_color
+        FROM messages m
+        LEFT JOIN aliases a ON a.capcode = m.capcode
+        LEFT JOIN groups  g ON g.id = a.group_id
+        WHERE m.lat IS NOT NULL AND m.lng IS NOT NULL
+          AND SUBSTR(m.timestamp, 1, 10) >= ? AND SUBSTR(m.timestamp, 1, 10) <= ?
+        ORDER BY m.id DESC LIMIT ?
+      `).all(fromDate, toDate, limit);
+    } else {
+      rows = getDb().prepare(`
+        SELECT m.id, m.timestamp, m.capcode, m.message, m.protocol, m.lat, m.lng,
+               a.name as alias_name, a.color as alias_color,
+               g.name as group_name, g.color as group_color
+        FROM messages m
+        LEFT JOIN aliases a ON a.capcode = m.capcode
+        LEFT JOIN groups  g ON g.id = a.group_id
+        WHERE m.lat IS NOT NULL AND m.lng IS NOT NULL
+          AND m.timestamp >= strftime('%Y-%m-%dT%H:%M:%S.000Z', datetime('now', '-' || ? || ' days'))
+        ORDER BY m.id DESC LIMIT ?
+      `).all(maxAgeDays, limit);
+    }
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
