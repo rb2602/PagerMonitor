@@ -123,7 +123,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     if (!visible || !mapRef.current) return;
     mapRef.current.invalidateSize();
     const { mapMaxAgeDays: mad, dateFrom: df, dateTo: dt } = fetchParamsRef.current;
-    fetchMap(10000, mad, df || null, dt || null)
+    fetchMap(df && dt ? 5000 : 2000, mad, df || null, dt || null)
       .then(rows => {
         if (!Array.isArray(rows)) return;
         rows.forEach(msg => {
@@ -234,7 +234,7 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     setMapMessages([]);
     setTotal(0);
 
-    fetchMap(10000, mapMaxAgeDays, dateFrom || null, dateTo || null)
+    fetchMap(dateFrom && dateTo ? 5000 : 2000, mapMaxAgeDays, dateFrom || null, dateTo || null)
       .then(rows => {
         const arr = Array.isArray(rows) ? rows : [];
         setMapMessages(arr); setTotal(arr.length);
@@ -364,6 +364,12 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
               background:'transparent', border:'1px solid var(--border)', color:'var(--text-2)',
               cursor:'pointer', fontFamily:'monospace', lineHeight:1 }}>×</button>
         )}
+      </div>
+      <div style={{ padding:'0.2rem 0.5rem 0.3rem', fontSize:'0.65rem', color:'var(--text-3)',
+        fontFamily:'monospace', borderBottom:'1px solid var(--border)' }}>
+        {dateFrom && dateTo
+          ? 'Date range: up to 5000 pins'
+          : 'Default view: up to 2000 pins · use dates for more'}
       </div>
       <div style={{ flex:1, overflowY:'auto' }}>
         {mapMessages.length === 0 && !loading ? (
