@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Wind, CloudRain, Thermometer, Cloud, Radar, LocateFixed, Loader } from 'lucide-react';
 import { useSite } from '../context/SiteContext.jsx';
 import { getCountryCenter } from '../utils/countryCenters.js';
@@ -44,25 +44,26 @@ export default function WeatherView({ visible, locationSharing }) {
   const userPos  = locationSharing?.position ?? null;  // { lat, lng }
   const geoState = locationSharing?.state    ?? 'idle';
 
-  // If localStorage says location was previously granted but position isn't in yet
-  // (hook's useEffect hasn't fired yet, still 'idle'), hold the iframe so we don't
-  // briefly show the wrong dot at the country center before the real fix arrives.
-  const pendingAutoStart = geoState === 'idle' && !userPos &&
-    localStorage.getItem('pm_location_prompt') === 'granted';
-  const waitingForPosition = geoState === 'asking' || pendingAutoStart;
-
   const centerLat  = userPos ? userPos.lat : countryCenter.lat;
   const centerLon  = userPos ? userPos.lng : countryCenter.lon;
   const centerZoom = userPos ? 10          : countryCenter.zoom;
 
-  const src = useMemo(
-    () => buildWindyUrl(
+  // Only commit to a Windy URL once we have a definitive location state.
+  // While waiting (hook is auto-resuming a previously-granted permission),
+  // keep iframeSrc null so the iframe never loads with the country-center dot.
+  const [iframeSrc, setIframeSrc] = useState(null);
+  useEffect(() => {
+    const pref = localStorage.getItem('pm_location_prompt');
+    if (geoState === 'asking' || (geoState === 'idle' && !userPos && pref === 'granted')) {
+      setIframeSrc(null);
+      return;
+    }
+    const url = buildWindyUrl(
       centerLat, centerLon, centerZoom, overlay,
-      userPos ? userPos.lat : null,
-      userPos ? userPos.lng : null,
-    ),
-    [centerLat, centerLon, centerZoom, overlay, userPos]
-  );
+      userPos?.lat ?? null, userPos?.lng ?? null,
+    );
+    setIframeSrc(prev => prev === url ? prev : url);
+  }, [geoState, userPos, centerLat, centerLon, centerZoom, overlay]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-0)' }}>
@@ -126,7 +127,7 @@ export default function WeatherView({ visible, locationSharing }) {
 
       {/* Windy iframe */}
       <div style={{ flex: 1, position: 'relative' }}>
-        {visible && waitingForPosition ? (
+        {visible && !iframeSrc ? (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
             height:'100%', flexDirection:'column', gap:'0.75rem',
             color:'var(--text-3)', fontFamily:'monospace', fontSize:'0.82rem' }}>
@@ -135,10 +136,10 @@ export default function WeatherView({ visible, locationSharing }) {
               animation:'spin 0.8s linear infinite' }} />
             Waiting for location…
           </div>
-        ) : visible ? (
+        ) : visible && iframeSrc ? (
           <iframe
-            key={src}
-            src={src}
+            key={iframeSrc}
+            src={iframeSrc}
             title="Windy weather radar"
             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
             allowFullScreen
