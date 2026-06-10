@@ -21,6 +21,7 @@ import { playAlertSound } from './components/admin/KeywordAlerts.jsx';
 window.__playAlertSound = playAlertSound;
 import { useBrowserNotifications } from './hooks/useBrowserNotifications.js';
 import { usePushSubscription }     from './hooks/usePushSubscription.js';
+import { useLocationSharing }      from './hooks/useLocationSharing.js';
 
 const BACKEND_URL  = import.meta.env.VITE_BACKEND_URL || '';
 const PAGE_OPTIONS = [20, 50, 100, 200];
@@ -129,6 +130,8 @@ export default function App() {
       if (data.type === 'message') browserNotif.notify(data);
     });
   }, [browserNotif.notify]);
+
+  const locationSharing = useLocationSharing(user);
 
   const [mapFlyTo, setMapFlyTo]       = useState(null);
   const [mapResetKey, setMapResetKey] = useState(0);
@@ -263,7 +266,8 @@ export default function App() {
               visible={view === 'map'}
               onFlyComplete={() => setMapFlyTo(null)}
               onLocationResolved={handleLocationResolved}
-              resetKey={mapResetKey} />
+              resetKey={mapResetKey}
+              locationSharing={locationSharing} />
           </div>
           <div style={{ position:'absolute', inset:0, display: view === 'archive' ? 'flex' : 'none', flexDirection:'column' }}>
             <ArchivePanel highlightRules={highlightRules} groups={groups} />
@@ -287,6 +291,45 @@ export default function App() {
           )}
         </ErrorBoundary>
       </main>
+
+      {/* Location sharing prompt — shown once on first open */}
+      {locationSharing.showPrompt && !isGuest && (
+        <div style={{
+          position:'fixed', bottom:'1rem', left:'50%', transform:'translateX(-50%)',
+          zIndex:9000, maxWidth:'360px', width:'calc(100% - 2rem)',
+          background:'var(--bg-1)', border:'1px solid var(--border)',
+          borderRadius:'0.6rem', padding:'0.75rem 1rem',
+          boxShadow:'0 4px 24px rgba(0,0,0,0.5)',
+          display:'flex', flexDirection:'column', gap:'0.5rem',
+        }}>
+          <div style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem' }}>
+            <span style={{ fontSize:'1.1rem', flexShrink:0 }}>📍</span>
+            <div>
+              <div style={{ fontSize:'0.85rem', fontWeight:600, color:'var(--text-1)', marginBottom:'0.2rem' }}>
+                Allow location access?
+              </div>
+              <div style={{ fontSize:'0.75rem', color:'var(--text-3)', lineHeight:1.5 }}>
+                Used to center the weather radar on your location.
+              </div>
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:'0.5rem', justifyContent:'flex-end' }}>
+            <button onClick={locationSharing.declinePrompt}
+              style={{ padding:'0.3rem 0.75rem', borderRadius:'0.4rem', fontSize:'0.78rem',
+                border:'1px solid var(--border)', background:'transparent',
+                color:'var(--text-2)', cursor:'pointer' }}>
+              Not now
+            </button>
+            <button onClick={locationSharing.acceptPrompt}
+              style={{ padding:'0.3rem 0.75rem', borderRadius:'0.4rem', fontSize:'0.78rem',
+                border:'1px solid color-mix(in srgb, #3b82f6 40%, transparent)',
+                background:'color-mix(in srgb, #3b82f6 15%, transparent)',
+                color:'#3b82f6', cursor:'pointer', fontWeight:600 }}>
+              Allow
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, LocateFixed, Users, Loader } from 'lucide-react';
-import { fetchMap, saveMessageLocation, clearMessageLocation, postUserLocation, deleteUserLocation, fetchUserLocations } from '../utils/api.js';
+import { fetchMap, saveMessageLocation, clearMessageLocation, fetchUserLocations } from '../utils/api.js';
 import { geocodeAddress, parseLocation } from '../utils/parseLocation.js';
 import { useSite } from '../context/SiteContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -32,7 +32,7 @@ function Flash({ msg }) {
     margin:'0.5rem 0.75rem' }}>{msg}</div>;
 }
 
-export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplete, onLocationResolved, visible, resetKey }) {
+export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplete, onLocationResolved, visible, resetKey, locationSharing }) {
   const { mapDotColor = '#00ff9d', mapMaxAgeDays = 30, geocodeCountry = 'si', locale, hour12 } = useSite();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -55,11 +55,10 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
   const [mapReady, setMapReady] = useState(false);
   const pendingFlyRef = useRef(null);
 
-  // ── User live location sharing ─────────────────────────────────────────────
-  const [sharingLocation, setSharingLocation] = useState(false);
-  const [shareGeoState,   setShareGeoState]   = useState('idle'); // 'idle'|'asking'|'active'|'denied'
-  const myMarkerRef     = useRef(null);
-  const shareIntervalRef = useRef(null);
+  // ── User live location sharing (driven by App-level hook) ─────────────────
+  const geoState    = locationSharing?.state    ?? 'idle';
+  const geoPosition = locationSharing?.position ?? null;
+  const myMarkerRef = useRef(null);
 
   // ── Admin: show other users' locations ────────────────────────────────────
   const [showUsers,    setShowUsers]    = useState(false);
@@ -134,61 +133,31 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
     fetchParamsRef.current = { mapMaxAgeDays, dateFrom, dateTo };
   }, [mapMaxAgeDays, dateFrom, dateTo]);
 
-  // ── Share my location ────────────────────────────────────────────────────────
-  const startSharing = useCallback(() => {
-    if (!navigator.geolocation) { setShareGeoState('denied'); return; }
-    setShareGeoState('asking');
-    const sendPos = (pos) => {
-      const { latitude: lat, longitude: lng } = pos.coords;
-      postUserLocation(lat, lng).catch(() => {});
-      // Update my own dot on the map
-      if (mapRef.current && window.L) {
-        const L = window.L;
-        if (myMarkerRef.current) {
-          myMarkerRef.current.setLatLng([lat, lng]);
-        } else {
-          myMarkerRef.current = L.marker([lat, lng], {
-            icon: L.divIcon({
-              className: '',
-              html: `<div style="width:14px;height:14px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 3px #3b82f688;"></div>`,
-              iconSize:[14,14], iconAnchor:[7,7],
-            }),
-            zIndexOffset: 1000,
-          }).bindPopup(`<div style="font-family:monospace;font-size:0.8rem"><strong style="color:#3b82f6">You</strong><br/>${user?.username}</div>`)
-            .addTo(mapRef.current);
-        }
-      }
-      setShareGeoState('active');
-    };
-    // Get initial position
-    navigator.geolocation.getCurrentPosition(sendPos, () => setShareGeoState('denied'), { timeout: 10000 });
-    // Then update every 30s
-    shareIntervalRef.current = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(sendPos, () => {}, { timeout: 10000 });
-    }, 30_000);
-  }, [user, mapRef]);
-
-  const stopSharing = useCallback(() => {
-    clearInterval(shareIntervalRef.current);
-    deleteUserLocation().catch(() => {});
-    if (myMarkerRef.current) {
-      try { mapRef.current?.removeLayer(myMarkerRef.current); } catch (_) {}
-      myMarkerRef.current = null;
-    }
-    setSharingLocation(false);
-    setShareGeoState('idle');
-  }, []);
-
+  // ── Sync blue "my location" dot from hook position ───────────────────────
   useEffect(() => {
-    if (sharingLocation) startSharing();
-    else if (shareGeoState !== 'idle') stopSharing();
-  }, [sharingLocation]);
-
-  // Stop sharing on unmount
-  useEffect(() => () => {
-    clearInterval(shareIntervalRef.current);
-    if (myMarkerRef.current) try { mapRef.current?.removeLayer(myMarkerRef.current); } catch (_) {}
-  }, []);
+    if (!mapRef.current || !window.L) return;
+    if (geoPosition) {
+      const { lat, lng } = geoPosition;
+      if (myMarkerRef.current) {
+        myMarkerRef.current.setLatLng([lat, lng]);
+      } else {
+        myMarkerRef.current = window.L.marker([lat, lng], {
+          icon: window.L.divIcon({
+            className: '',
+            html: `<div style="width:14px;height:14px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 4px #3b82f655;"></div>`,
+            iconSize:[14,14], iconAnchor:[7,7],
+          }),
+          zIndexOffset: 1000,
+        }).bindPopup(`<div style="font-family:monospace;font-size:0.8rem"><strong style="color:#3b82f6">You</strong><br/>${user?.username}</div>`)
+          .addTo(mapRef.current);
+      }
+    } else {
+      if (myMarkerRef.current) {
+        try { mapRef.current?.removeLayer(myMarkerRef.current); } catch (_) {}
+        myMarkerRef.current = null;
+      }
+    }
+  }, [geoPosition, mapReady]);
 
   // ── Show users (admin) ────────────────────────────────────────────────────
   const refreshUserMarkers = useCallback(() => {
@@ -473,24 +442,24 @@ export default function MapView({ messages: liveMessages, flyToMsg, onFlyComplet
       {/* Share my location */}
       <div style={{ padding:'0.4rem 0.5rem', borderBottom:'1px solid var(--border)',
         display:'flex', alignItems:'center', gap:'0.4rem', flexWrap:'wrap' }}>
-        {shareGeoState !== 'denied' ? (
+        {geoState !== 'denied' ? (
           <button
-            onClick={() => setSharingLocation(s => !s)}
+            onClick={() => geoState === 'active' ? locationSharing?.stop() : locationSharing?.start()}
             style={{
               display:'flex', alignItems:'center', gap:'0.3rem',
               padding:'0.22rem 0.5rem', borderRadius:'0.35rem', fontSize:'0.72rem',
               fontWeight:500, cursor:'pointer', transition:'all 0.15s', flex:1,
-              border: shareGeoState === 'active'
+              border: geoState === 'active'
                 ? '1px solid color-mix(in srgb, #3b82f6 40%, transparent)'
                 : '1px solid var(--border)',
-              background: shareGeoState === 'active'
+              background: geoState === 'active'
                 ? 'color-mix(in srgb, #3b82f6 12%, transparent)'
                 : 'var(--bg-3)',
-              color: shareGeoState === 'active' ? '#3b82f6' : 'var(--text-2)',
+              color: geoState === 'active' ? '#3b82f6' : 'var(--text-2)',
             }}>
-            {shareGeoState === 'asking'
+            {geoState === 'asking'
               ? <><Loader size={11} style={{ animation:'spin 1s linear infinite' }}/> Locating…</>
-              : <><LocateFixed size={11}/> {shareGeoState === 'active' ? 'Sharing location' : 'Share my location'}</>}
+              : <><LocateFixed size={11}/> {geoState === 'active' ? 'Sharing location' : 'Share my location'}</>}
           </button>
         ) : (
           <span style={{ fontSize:'0.68rem', color:'var(--accent-amber)', fontFamily:'monospace' }}>Location blocked</span>
