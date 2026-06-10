@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Wind, CloudRain, Thermometer, Cloud, Radar, LocateFixed, Loader } from 'lucide-react';
 import { useSite } from '../context/SiteContext.jsx';
 import { getCountryCenter } from '../utils/countryCenters.js';
@@ -25,7 +25,7 @@ function buildWindyUrl(lat, lon, zoom, overlay, userLat, userLon) {
     metricTemp: 'default',
     radarRange: '-1',
   });
-  // detailLat/detailLon place the marker — only include when we have the user's real location
+  // Only add the detail marker when we have the user's real GPS position
   if (userLat != null && userLon != null) {
     params.set('detailLat', userLat.toFixed(4));
     params.set('detailLon', userLon.toFixed(4));
@@ -34,37 +34,28 @@ function buildWindyUrl(lat, lon, zoom, overlay, userLat, userLon) {
   return `https://embed.windy.com/embed2.html?${params}`;
 }
 
-export default function WeatherView({ visible }) {
+export default function WeatherView({ visible, locationSharing }) {
   const { geocodeCountry } = useSite();
-  const [overlay, setOverlay]     = useState('radar');
-  const [userPos, setUserPos]     = useState(null);   // { lat, lon } once granted
-  const [geoState, setGeoState]   = useState('idle'); // 'idle' | 'asking' | 'granted' | 'denied'
+  const [overlay, setOverlay] = useState('radar');
 
   const countryCenter = getCountryCenter(geocodeCountry);
 
-  // Center on user location if granted, otherwise country center
+  // Use position from the shared hook if available
+  const userPos  = locationSharing?.position ?? null;  // { lat, lng }
+  const geoState = locationSharing?.state    ?? 'idle';
+
   const centerLat  = userPos ? userPos.lat : countryCenter.lat;
-  const centerLon  = userPos ? userPos.lon : countryCenter.lon;
+  const centerLon  = userPos ? userPos.lng : countryCenter.lon;
   const centerZoom = userPos ? 10          : countryCenter.zoom;
 
   const src = useMemo(
-    () => buildWindyUrl(centerLat, centerLon, centerZoom, overlay,
-                        userPos?.lat ?? null, userPos?.lon ?? null),
+    () => buildWindyUrl(
+      centerLat, centerLon, centerZoom, overlay,
+      userPos ? userPos.lat : null,
+      userPos ? userPos.lng : null,
+    ),
     [centerLat, centerLon, centerZoom, overlay, userPos]
   );
-
-  const requestLocation = () => {
-    if (!navigator.geolocation) { setGeoState('denied'); return; }
-    setGeoState('asking');
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        setUserPos({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-        setGeoState('granted');
-      },
-      () => setGeoState('denied'),
-      { timeout: 10000 }
-    );
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-0)' }}>
@@ -93,32 +84,31 @@ export default function WeatherView({ visible }) {
           </button>
         ))}
 
-        {/* Location button */}
+        {/* Location status / request button */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          {geoState !== 'denied' && (
+          {geoState === 'denied' ? (
+            <span style={{ fontSize: '0.68rem', color: 'var(--accent-amber)' }}>Location blocked</span>
+          ) : (
             <button
-              onClick={geoState === 'granted' ? undefined : requestLocation}
-              title={geoState === 'granted' ? 'Centered on your location' : 'Center on my location'}
+              onClick={geoState === 'idle' ? locationSharing?.start : undefined}
+              title={userPos ? 'Centered on your location' : 'Center on my location'}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.3rem',
                 padding: '0.25rem 0.55rem', borderRadius: '0.4rem', fontSize: '0.72rem',
-                fontWeight: 500, cursor: geoState === 'granted' ? 'default' : 'pointer',
+                fontWeight: 500, cursor: userPos ? 'default' : 'pointer',
                 transition: 'all 0.15s', whiteSpace: 'nowrap',
-                border: geoState === 'granted'
+                border: userPos
                   ? '1px solid color-mix(in srgb, var(--accent-green) 35%, transparent)'
                   : '1px solid var(--border)',
-                background: geoState === 'granted'
+                background: userPos
                   ? 'color-mix(in srgb, var(--accent-green) 12%, transparent)'
                   : 'var(--bg-3)',
-                color: geoState === 'granted' ? 'var(--accent-green)' : 'var(--text-2)',
+                color: userPos ? 'var(--accent-green)' : 'var(--text-2)',
               }}>
               {geoState === 'asking'
                 ? <><Loader size={12} style={{ animation: 'spin 1s linear infinite' }}/> Locating…</>
-                : <><LocateFixed size={12}/> {geoState === 'granted' ? 'My location' : 'Use my location'}</>}
+                : <><LocateFixed size={12}/> {userPos ? 'My location' : 'Use my location'}</>}
             </button>
-          )}
-          {geoState === 'denied' && (
-            <span style={{ fontSize: '0.68rem', color: 'var(--accent-amber)' }}>Location blocked</span>
           )}
           <span style={{ fontSize: '0.68rem', color: 'var(--text-3)' }}>
             Powered by <a href="https://www.windy.com" target="_blank" rel="noopener noreferrer"

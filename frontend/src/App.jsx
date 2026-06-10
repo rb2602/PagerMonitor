@@ -273,7 +273,7 @@ export default function App() {
             <ArchivePanel highlightRules={highlightRules} groups={groups} />
           </div>
           <div style={{ position:'absolute', inset:0, display: view === 'weather' ? 'flex' : 'none', flexDirection:'column' }}>
-            <WeatherView visible={view === 'weather'} />
+            <WeatherView visible={view === 'weather'} locationSharing={locationSharing} />
           </div>
           <div style={{ position:'absolute', inset:0, display: view === 'search' ? 'flex' : 'none', flexDirection:'column' }}>
             <SearchPanel results={searchResults} searching={searching}
