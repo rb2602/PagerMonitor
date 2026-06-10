@@ -44,6 +44,13 @@ export default function WeatherView({ visible, locationSharing }) {
   const userPos  = locationSharing?.position ?? null;  // { lat, lng }
   const geoState = locationSharing?.state    ?? 'idle';
 
+  // If localStorage says location was previously granted but position isn't in yet
+  // (hook's useEffect hasn't fired yet, still 'idle'), hold the iframe so we don't
+  // briefly show the wrong dot at the country center before the real fix arrives.
+  const pendingAutoStart = geoState === 'idle' && !userPos &&
+    localStorage.getItem('pm_location_prompt') === 'granted';
+  const waitingForPosition = geoState === 'asking' || pendingAutoStart;
+
   const centerLat  = userPos ? userPos.lat : countryCenter.lat;
   const centerLon  = userPos ? userPos.lng : countryCenter.lon;
   const centerZoom = userPos ? 10          : countryCenter.zoom;
@@ -119,7 +126,7 @@ export default function WeatherView({ visible, locationSharing }) {
 
       {/* Windy iframe */}
       <div style={{ flex: 1, position: 'relative' }}>
-        {visible && geoState === 'asking' ? (
+        {visible && waitingForPosition ? (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
             height:'100%', flexDirection:'column', gap:'0.75rem',
             color:'var(--text-3)', fontFamily:'monospace', fontSize:'0.82rem' }}>
