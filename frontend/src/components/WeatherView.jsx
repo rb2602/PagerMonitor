@@ -109,33 +109,36 @@ function ApiMap({ windyApiKey, userPos, countryCenter, overlay, visible, onInitF
   const initRef   = useRef(false);  // windyInit called?
   const [ready, setReady] = useState(false); // true once windyInit callback fires
 
-  // Windy's libBoot.js AND its async GL modules (gl-particles etc.) all access
-  // window.L expecting Leaflet 1.4.x (.Layer.extend() removed in 1.9.x).
-  // Strategy:
-  //   1. Pre-load Leaflet 1.4.0 from CDN, capture it in _windy14L
-  //   2. Keep window.L = 1.4.x until windyInit callback fires (all async modules done)
-  //   3. In the callback, restore _reactL (react-leaflet 1.9.x)
-  //   4. Safety timeout restores L if callback never fires (e.g. API error)
+  // libBoot.js checks window.L.version synchronously — if it's not '1.4.x' it
+  // throws, and if window.L is undefined it crashes on .Layer access.
+  // We can't use vanilla CDN Leaflet 1.4.0 either: Windy skips loading its own
+  // patched Leaflet bundle (which its GL plugins need), causing gl-particles to
+  // fail on missing internal extensions.
+  //
+  // Solution: Proxy our existing react-leaflet 1.9.x to spoof only the version
+  // string. libBoot.js passes the version check AND Windy still uses our full
+  // 1.9.x as the 'leaflet' module in its tinyrequire system, so .Layer.extend()
+  // and all other methods are available.
   useEffect(() => {
     if (!_reactL) _reactL = window.L; // capture once before any swap
+    _windy14L = _reactL;              // use same L for markers
 
     if (document.getElementById('windy-api-script')) return; // already loaded
 
-    const lf = document.createElement('script');
-    lf.id  = 'windy-leaflet14';
-    lf.src = 'https://unpkg.com/leaflet@1.4.0/dist/leaflet.js';
-    lf.addEventListener('load', () => {
-      _windy14L = window.L; // capture 1.4.x — window.L stays 1.4.x for Windy
+    if (_reactL) {
+      // Proxy: intercept only 'version', forward everything else to real 1.9.x
+      window.L = new Proxy(_reactL, {
+        get(target, prop) {
+          return prop === 'version' ? '1.4.0' : target[prop];
+        },
+      });
+    }
 
-      const s = document.createElement('script');
-      s.id  = 'windy-api-script';
-      s.src = 'https://api.windy.com/assets/map-forecast/libBoot.js';
-      // On network error only — normal path restores in windyInit callback
-      s.addEventListener('error', () => { window.L = _reactL; });
-      document.head.appendChild(s);
-    });
-    lf.addEventListener('error', () => { window.L = _reactL; });
-    document.head.appendChild(lf);
+    const s = document.createElement('script');
+    s.id  = 'windy-api-script';
+    s.src = 'https://api.windy.com/assets/map-forecast/libBoot.js';
+    s.addEventListener('error', () => { window.L = _reactL; });
+    document.head.appendChild(s);
   }, []);
 
   // Init when the tab becomes visible for the first time.
