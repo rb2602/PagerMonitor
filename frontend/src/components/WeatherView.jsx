@@ -11,9 +11,10 @@ const LAYERS = [
   { id: 'clouds', label: 'Clouds', icon: <Cloud size={13}/>,       desc: 'Cloud cover' },
 ];
 
-// Windy JS API uses different overlay names than the iframe embed.
-// 'radar' is not available in the API; map to the closest equivalent.
-const API_OVERLAY = { radar: 'rain', rain: 'rain', wind: 'wind', temp: 'temp', clouds: 'clouds' };
+// Windy JS API overlay names differ from iframe embed.
+// 'radar' and 'rain' are not valid API overlays; map to the closest equivalents.
+// Valid API overlays: wind, temp, clouds, pressure, gust, rainAccu, snowAccu, thunder, waves, cape
+const API_OVERLAY = { radar: 'rainAccu', rain: 'rainAccu', wind: 'wind', temp: 'temp', clouds: 'clouds' };
 
 // Module-level refs — survive component remounts and cross-effect communication.
 // Captures are done once; cleared on page reload.
@@ -176,7 +177,7 @@ function ApiMap({ windyApiKey, userPos, countryCenter, overlay, visible, onInitF
       };
 
       const p = window.windyInit(
-        { key: windyApiKey, verbose: false, lat, lon, zoom },
+        { key: windyApiKey, verbose: false, lat, lon, zoom, overlay: apiOverlay },
         (api) => {
           clearTimeout(safetyTimer);
           window.L = _reactL; // all Windy GL modules loaded — safe to restore
@@ -277,7 +278,7 @@ function IframeEmbed({ visible, userPos, geoState, countryCenter, overlay }) {
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function WeatherView({ visible, locationSharing }) {
   const { geocodeCountry, windyApiKey, settingsLoaded } = useSite();
-  const [overlay, setOverlay]       = useState('radar');
+  const [overlay, setOverlay]       = useState('wind');
   // Persist API failure within the session — avoids re-trying (and blinking) on refresh.
   // sessionStorage clears on tab close so Windy gets another chance next session.
   const [apiInitFailed, setApiFail] = useState(
