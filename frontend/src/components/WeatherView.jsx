@@ -95,46 +95,56 @@ function Toolbar({ overlay, onOverlayChange, geoState, userPos, locationSharing 
 
 // ── Windy JS API map — no iframe, smooth position updates ─────────────────────
 function ApiMap({ windyApiKey, userPos, countryCenter, overlay, visible }) {
-  const windyRef     = useRef(null);  // windyAPI instance
-  const markerRef    = useRef(null);  // Leaflet marker for user position
-  const initRef      = useRef(false); // windyInit called?
-  const [scriptReady, setScriptReady] = useState(!!window.windyInit);
+  const windyRef  = useRef(null);  // windyAPI instance
+  const markerRef = useRef(null);  // Leaflet marker for user position
+  const initRef   = useRef(false); // windyInit called?
 
-  // Step 1 — load the Windy script (fire-and-forget, before tab is opened)
+  // Start fetching the boot script immediately (before the tab is opened)
+  // so it's already in flight when the user first navigates here.
   useEffect(() => {
-    if (window.windyInit) { setScriptReady(true); return; }
-    let s = document.getElementById('windy-api-script');
-    if (!s) {
-      s = document.createElement('script');
-      s.id = 'windy-api-script';
-      s.src = 'https://api.windy.com/assets/map-forecast/libBoot.js';
-      document.head.appendChild(s);
-    }
-    const onLoad = () => setScriptReady(true);
-    s.addEventListener('load', onLoad);
-    return () => s.removeEventListener('load', onLoad);
+    if (document.getElementById('windy-api-script')) return;
+    const s = document.createElement('script');
+    s.id  = 'windy-api-script';
+    s.src = 'https://api.windy.com/assets/map-forecast/libBoot.js';
+    document.head.appendChild(s);
   }, []);
 
-  // Step 2 — init only when the tab is visible AND the script is ready.
-  // windyInit needs the #windy div to have real dimensions; calling it inside a
-  // display:none parent causes Leaflet to size everything as 0×0.
+  // Init when the tab becomes visible for the first time.
+  // libBoot.js is a *boot loader* — it fetches the real SDK asynchronously,
+  // so window.windyInit is not available when the script's own load event fires.
+  // We poll every 100 ms until it becomes a function (max ~10 s).
   useEffect(() => {
-    if (!visible || !scriptReady || initRef.current) return;
-    initRef.current = true;
+    if (!visible || initRef.current) return;
+
     const lat  = userPos?.lat ?? countryCenter.lat;
     const lon  = userPos?.lng ?? countryCenter.lon;
     const zoom = userPos ? 10  : countryCenter.zoom;
-    window.windyInit(
-      { key: windyApiKey, verbose: false, lat, lon, zoom },
-      (api) => {
-        windyRef.current = api;
-        api.store.set('overlay', overlay);
-      },
-    );
-  // Only re-run when the two readiness flags change; all other values are
-  // captured once intentionally (initial center is set once, updates via setView).
+
+    let cancelled = false;
+    let timer;
+
+    const tryInit = () => {
+      if (cancelled || initRef.current) return;
+      if (typeof window.windyInit !== 'function') {
+        timer = setTimeout(tryInit, 100);
+        return;
+      }
+      initRef.current = true;
+      window.windyInit(
+        { key: windyApiKey, verbose: false, lat, lon, zoom },
+        (api) => {
+          if (cancelled) return;
+          windyRef.current = api;
+          api.store.set('overlay', overlay);
+        },
+      );
+    };
+
+    tryInit();
+    return () => { cancelled = true; clearTimeout(timer); };
+  // Intentionally captures initial position once — subsequent moves use setView().
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, scriptReady]);
+  }, [visible]);
 
   // Layer change — no reload needed
   useEffect(() => {
