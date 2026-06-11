@@ -11,6 +11,15 @@ const LAYERS = [
   { id: 'clouds', label: 'Clouds', icon: <Cloud size={13}/>,       desc: 'Cloud cover' },
 ];
 
+// Windy JS API uses different overlay names than the iframe embed.
+// 'radar' is not available in the API; map to the closest equivalent.
+const API_OVERLAY = { radar: 'rain', rain: 'rain', wind: 'wind', temp: 'temp', clouds: 'clouds' };
+
+// Module-level refs — survive component remounts and cross-effect communication.
+// Captures are done once; cleared on page reload.
+let _reactL   = null;  // react-leaflet Leaflet 1.9.x — preserved across swaps
+let _windy14L = null;  // Leaflet 1.4.x — needed for Windy marker creation
+
 function haversineKm(a, b) {
   const R = 6371, r = Math.PI / 180;
   const dLat = (b.lat - a.lat) * r, dLon = (b.lng - a.lng) * r;
@@ -98,69 +107,72 @@ function ApiMap({ windyApiKey, userPos, countryCenter, overlay, visible }) {
   const windyRef  = useRef(null);  // windyAPI instance
   const markerRef = useRef(null);  // Leaflet marker for user position
   const initRef   = useRef(false); // windyInit called?
-  const l14Ref    = useRef(null);  // Leaflet 1.4.x instance (needed by Windy)
 
-  // Windy's libBoot.js requires Leaflet 1.4.x at window.L — it reads window.L
-  // synchronously (version check + Layer class access) when the script executes.
-  // Strategy: load Leaflet 1.4.0 first, capture it, then load libBoot.js while
-  // 1.4.x is still in window.L, then restore our react-leaflet 1.9.x.
+  // Windy's libBoot.js AND its async GL modules (gl-particles etc.) all access
+  // window.L expecting Leaflet 1.4.x (.Layer.extend() removed in 1.9.x).
+  // Strategy:
+  //   1. Pre-load Leaflet 1.4.0 from CDN, capture it in _windy14L
+  //   2. Keep window.L = 1.4.x until windyInit callback fires (all async modules done)
+  //   3. In the callback, restore _reactL (react-leaflet 1.9.x)
+  //   4. Safety timeout restores L if callback never fires (e.g. API error)
   useEffect(() => {
-    if (document.getElementById('windy-api-script')) {
-      // Already loaded — l14Ref may have been set by a previous mount; if not,
-      // fall back to whatever L is in window (basic marker API is compatible).
-      if (!l14Ref.current) l14Ref.current = window.L;
-      return;
-    }
+    if (!_reactL) _reactL = window.L; // capture once before any swap
 
-    const savedL = window.L; // react-leaflet 1.9.x
+    if (document.getElementById('windy-api-script')) return; // already loaded
 
     const lf = document.createElement('script');
     lf.id  = 'windy-leaflet14';
     lf.src = 'https://unpkg.com/leaflet@1.4.0/dist/leaflet.js';
     lf.addEventListener('load', () => {
-      l14Ref.current = window.L; // capture 1.4.x before anything restores it
+      _windy14L = window.L; // capture 1.4.x — window.L stays 1.4.x for Windy
 
-      // window.L is now 1.4.x — load libBoot.js immediately so it sees 1.4.x
       const s = document.createElement('script');
       s.id  = 'windy-api-script';
       s.src = 'https://api.windy.com/assets/map-forecast/libBoot.js';
-      const restore = () => { window.L = savedL; };
-      s.addEventListener('load',  restore);
-      s.addEventListener('error', restore);
+      // On network error only — normal path restores in windyInit callback
+      s.addEventListener('error', () => { window.L = _reactL; });
       document.head.appendChild(s);
     });
-    lf.addEventListener('error', () => { window.L = savedL; });
+    lf.addEventListener('error', () => { window.L = _reactL; });
     document.head.appendChild(lf);
   }, []);
 
   // Init when the tab becomes visible for the first time.
   // libBoot.js is a *boot loader* — it fetches the real SDK asynchronously,
   // so window.windyInit is not available when the script's own load event fires.
-  // We poll every 100 ms until it becomes a function (max ~10 s).
+  // Poll every 100 ms until it becomes a function (max ~15 s).
   useEffect(() => {
     if (!visible || initRef.current) return;
 
-    const lat  = userPos?.lat ?? countryCenter.lat;
-    const lon  = userPos?.lng ?? countryCenter.lon;
-    const zoom = userPos ? 10  : countryCenter.zoom;
+    const lat        = userPos?.lat ?? countryCenter.lat;
+    const lon        = userPos?.lng ?? countryCenter.lon;
+    const zoom       = userPos ? 10  : countryCenter.zoom;
+    const apiOverlay = API_OVERLAY[overlay] ?? 'wind';
 
     let cancelled = false;
     let timer;
-    let attempts = 0;
+    let attempts  = 0;
 
     const tryInit = () => {
       if (cancelled || initRef.current) return;
       if (typeof window.windyInit !== 'function') {
         if (++attempts < 150) timer = setTimeout(tryInit, 100);
+        else window.L = _reactL; // timed out — restore L
         return;
       }
       initRef.current = true;
+
+      // Safety: restore window.L if windyInit never calls back (e.g. API key error)
+      const safetyTimer = setTimeout(() => { window.L = _reactL; }, 30_000);
+
       window.windyInit(
         { key: windyApiKey, verbose: false, lat, lon, zoom },
         (api) => {
+          clearTimeout(safetyTimer);
+          window.L = _reactL; // all Windy GL modules loaded — safe to restore
           if (cancelled) return;
           windyRef.current = api;
-          api.store.set('overlay', overlay);
+          try { api.store.set('overlay', apiOverlay); } catch (_) {}
         },
       );
     };
@@ -173,7 +185,9 @@ function ApiMap({ windyApiKey, userPos, countryCenter, overlay, visible }) {
 
   // Layer change — no reload needed
   useEffect(() => {
-    windyRef.current?.store.set('overlay', overlay);
+    const api = windyRef.current;
+    if (!api) return;
+    try { api.store.set('overlay', API_OVERLAY[overlay] ?? 'wind'); } catch (_) {}
   }, [overlay]);
 
   // Position update — smooth pan, no reload
@@ -183,16 +197,13 @@ function ApiMap({ windyApiKey, userPos, countryCenter, overlay, visible }) {
     api.map.setView([userPos.lat, userPos.lng], api.map.getZoom());
     if (markerRef.current) {
       markerRef.current.setLatLng([userPos.lat, userPos.lng]);
-    } else {
-      const L = l14Ref.current;
-      if (L) {
-        const icon = L.divIcon({
-          className: '',
-          html: '<div style="width:14px;height:14px;background:#3b82f6;border:2.5px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(59,130,246,.7)"></div>',
-          iconSize: [14, 14], iconAnchor: [7, 7],
-        });
-        markerRef.current = L.marker([userPos.lat, userPos.lng], { icon }).addTo(api.map);
-      }
+    } else if (_windy14L) {
+      const icon = _windy14L.divIcon({
+        className: '',
+        html: '<div style="width:14px;height:14px;background:#3b82f6;border:2.5px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(59,130,246,.7)"></div>',
+        iconSize: [14, 14], iconAnchor: [7, 7],
+      });
+      markerRef.current = _windy14L.marker([userPos.lat, userPos.lng], { icon }).addTo(api.map);
     }
   }, [userPos]);
 
