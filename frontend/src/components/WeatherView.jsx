@@ -99,13 +99,20 @@ function ApiMap({ windyApiKey, userPos, countryCenter, overlay, visible }) {
   const markerRef = useRef(null);  // Leaflet marker for user position
   const initRef   = useRef(false); // windyInit called?
 
-  // Start fetching the boot script immediately (before the tab is opened)
-  // so it's already in flight when the user first navigates here.
+  // Fetch the boot script early (before the tab is opened) so Windy is ready
+  // when the user navigates here. libBoot.js checks window.L *synchronously*
+  // during script execution, so we must hide our react-leaflet Leaflet BEFORE
+  // appending the tag, then restore it once the script has captured its own ref.
   useEffect(() => {
     if (document.getElementById('windy-api-script')) return;
+    const savedL = window.L;
+    window.L = undefined;
     const s = document.createElement('script');
     s.id  = 'windy-api-script';
     s.src = 'https://api.windy.com/assets/map-forecast/libBoot.js';
+    const restore = () => { window.L = savedL; };
+    s.addEventListener('load',  restore);
+    s.addEventListener('error', restore);
     document.head.appendChild(s);
   }, []);
 
@@ -130,15 +137,15 @@ function ApiMap({ windyApiKey, userPos, countryCenter, overlay, visible }) {
         return;
       }
       initRef.current = true;
-      // Windy requires Leaflet 1.4.x but our app has react-leaflet 1.9.x on
-      // window.L. Temporarily hide our L so Windy loads its own bundled copy,
-      // then restore ours so react-leaflet maps are unaffected.
+      // Belt-and-suspenders: hide our react-leaflet L in case windyInit also
+      // does a version check internally. The main fix is in the script-load
+      // effect above (clearing window.L before libBoot.js executes).
       const savedL = window.L;
       window.L = undefined;
       window.windyInit(
         { key: windyApiKey, verbose: false, lat, lon, zoom },
         (api) => {
-          window.L = savedL; // restore react-leaflet's Leaflet
+          window.L = savedL;
           if (cancelled) return;
           windyRef.current = api;
           api.store.set('overlay', overlay);
