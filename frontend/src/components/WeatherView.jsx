@@ -130,9 +130,15 @@ function ApiMap({ windyApiKey, userPos, countryCenter, overlay, visible }) {
         return;
       }
       initRef.current = true;
+      // Windy requires Leaflet 1.4.x but our app has react-leaflet 1.9.x on
+      // window.L. Temporarily hide our L so Windy loads its own bundled copy,
+      // then restore ours so react-leaflet maps are unaffected.
+      const savedL = window.L;
+      window.L = undefined;
       window.windyInit(
         { key: windyApiKey, verbose: false, lat, lon, zoom },
         (api) => {
+          window.L = savedL; // restore react-leaflet's Leaflet
           if (cancelled) return;
           windyRef.current = api;
           api.store.set('overlay', overlay);
