@@ -276,7 +276,7 @@
     "noDevicesSubscribed": "Keine Geräte abonniert — Push über die 🔔 Glocke im Header aktivieren",
     "devicesSubscribed_one": "{{count}} Gerät abonniert",
     "devicesSubscribed_other": "{{count}} Geräte abonniert",
-    "sendTestPushTitle": "Eine Test-Push an alle abonnierten Geräte senden",
+    "sendTestPushTitle": "Eine Test-Push-Benachrichtigung an alle abonnierten Geräte senden",
     "sending": "Wird gesendet…",
     "testPush": "Test-Push",
     "unknownDevice": "Unbekanntes Gerät",
