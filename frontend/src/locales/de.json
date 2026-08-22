@@ -306,7 +306,7 @@
     "failed": "Fehlgeschlagen",
     "noActiveSubscriptions": "Keine aktiven Abonnements gefunden — Push auf deinen Geräten erneut aktivieren",
     "testSentToDevices_one": "Test an {{count}} Gerät gesendet — hast du ihn erhalten?",
-    "testSentToDevices_other": "Test an {{count}} Geräte gesendet — habt ihr ihn auf allen erhalten?",
+    "testSentToDevices_other": "Test an {{count}} Geräte gesendet — hast du ihn auf allen erhalten?",
     "failedToSend": "Senden fehlgeschlagen"
   },
   "archivePanel": {
