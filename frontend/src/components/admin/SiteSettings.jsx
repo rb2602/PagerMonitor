@@ -43,6 +43,7 @@ const LOCALES = [
   { value: 'en-GB', label: 'en-GB — English (UK)' },
   { value: 'de-DE', label: 'de-DE — German' },
   { value: 'de-AT', label: 'de-AT — German (Austria)' },
+  { value: 'de-CH', label: 'de-CH — German (Switzerland)' },
   { value: 'fr-FR', label: 'fr-FR — French' },
   { value: 'it-IT', label: 'it-IT — Italian' },
   { value: 'hr-HR', label: 'hr-HR — Croatian' },

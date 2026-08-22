@@ -191,7 +191,7 @@ router.put('/me/email', requireAuth, (req, res) => {
 // PUT /auth/me/language — user overrides their own UI language, independent of the
 // site-wide locale setting (which still governs date/time formatting for everyone).
 // null clears the override so the site default applies again.
-const UI_LANGUAGES = ['en', 'sl'];
+const UI_LANGUAGES = ['en', 'sl', 'de'];
 router.put('/me/language', requireAuth, (req, res) => {
   try {
     const lang = req.body.uiLanguage;

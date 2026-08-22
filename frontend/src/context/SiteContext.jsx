@@ -45,12 +45,15 @@ export function SiteProvider({ children }) {
       .finally(() => setSettingsLoaded(true));
   }, []);
 
-  // UI language follows the site locale setting (sl-SI → Slovenian, everything else →
-  // English) — but a logged-in user's own uiLanguage preference, if set, wins over that
-  // site default. Note this only ever touches i18next's UI text; date/time formatting
-  // still follows `locale` above for every user, deliberately not tied to this override.
+  // UI language follows the site locale setting (sl-SI → Slovenian, de-DE/de-AT/de-CH →
+  // German, everything else → English) — but a logged-in user's own uiLanguage preference,
+  // if set, wins over that site default. Note this only ever touches i18next's UI text;
+  // date/time formatting still follows `locale` above for every user, deliberately not tied
+  // to this override.
   useEffect(() => {
-    const siteLang = settings.locale === 'sl-SI' ? 'sl' : 'en';
+    const siteLang = settings.locale === 'sl-SI' ? 'sl'
+      : settings.locale?.startsWith('de-') ? 'de'
+      : 'en';
     i18n.changeLanguage(user?.uiLanguage || siteLang);
   }, [settings.locale, user?.uiLanguage]);
 

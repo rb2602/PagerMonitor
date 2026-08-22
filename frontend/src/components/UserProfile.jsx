@@ -333,6 +333,7 @@ export default function UserProfile({ onClose }) {
               <option value="">{t('userProfile.followSiteDefault')}</option>
               <option value="en">English</option>
               <option value="sl">Slovenščina</option>
+              <option value="de">Deutsch</option>
             </select>
             <Flash msg={langMsg} />
           </div>
