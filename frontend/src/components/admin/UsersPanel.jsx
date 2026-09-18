@@ -1,9 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Users, UserPlus, Trash2, Key, ShieldCheck, LogOut, Pencil, Save, X, Mail, Link2, Copy, Ban } from 'lucide-react';
 import { authUsers, authRegister, authSetRole, authResetPw, authDeleteUser, authChangePw, adminSetUserEmail,
          adminFetchInvites, adminCreateInvite, adminRevokeInvite, adminRenameOwnOrg } from '../../utils/api.js';
 import { useAdminFetch } from '../../hooks/useAdminFetch.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { normTs } from '../../utils/time.js';
+
+function fmtLastLogin(ts) {
+  if (!ts) return 'Never logged in';
+  const normalized = normTs(ts);
+  const sec = Math.floor((Date.now() - new Date(normalized).getTime()) / 1000);
+  if (sec < 60)    return `${sec}s ago`;
+  if (sec < 3600)  return `${Math.floor(sec/60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec/3600)}h ago`;
+  if (sec < 86400 * 30) return `${Math.floor(sec/86400)}d ago`;
+  return new Date(normalized).toLocaleDateString();
+}
 
 function Flash({ msg }) {
   if (!msg) return null;
@@ -32,6 +44,12 @@ function UserRow({ u, me, onRole, onDelete, onEdit }) {
             <Mail size={10}/> {u.email}
           </div>
         )}
+        <div style={{ fontSize:'0.7rem', display:'flex', alignItems:'center', gap:'0.35rem',
+          color: u.online ? 'var(--accent-green)' : 'var(--text-3)' }}>
+          <span style={{ width:'6px', height:'6px', borderRadius:'50%', flexShrink:0,
+            background: u.online ? 'var(--accent-green)' : 'var(--text-3)' }} />
+          {u.online ? 'Online' : `Last seen ${fmtLastLogin(u.last_login)}`}
+        </div>
       </div>
       <select value={u.role || 'viewer'} onChange={e => onRole(u.id, e.target.value)}
         disabled={u.username === me?.username}
@@ -58,6 +76,12 @@ export default function UsersPanel() {
   const { user: me, logout, refreshUser } = useAuth();
   const { data: users, loading, reload } = useAdminFetch(() => authUsers(me?.orgId), [me?.orgId]);
   const { data: invites, loading: invitesLoading, reload: reloadInvites } = useAdminFetch(adminFetchInvites, []);
+
+  // Keep the online/offline dot current — same 15s cadence as the SDR Clients page.
+  useEffect(() => {
+    const timer = setInterval(reload, 15_000);
+    return () => clearInterval(timer);
+  }, [reload]);
   const [msg, setMsg]         = useState(null);
   const [newUser, setNewUser] = useState({ username:'', password:'', email:'', role:'viewer' });
   const [pwForm, setPwForm]   = useState({ oldPassword:'', newPassword:'' });

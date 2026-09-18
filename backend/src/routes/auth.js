@@ -107,7 +107,8 @@ router.get('/users', requireAdmin, (req, res) => {
   const orgId = req.session.isPlatformAdmin
     ? (req.query.org_id ? parseInt(req.query.org_id) : null)
     : req.session.orgId;
-  res.json(getUsers(orgId));
+  const online = require('../services/websocket').getConnectedUsernames();
+  res.json(getUsers(orgId).map(u => ({ ...u, online: online.has(u.username) })));
 });
 
 // PUT /auth/users/:id/role

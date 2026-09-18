@@ -131,6 +131,17 @@ function safeSend(ws, obj, raw) {
 
 function getClientCount() { return clientCount; }
 
+// Usernames with at least one open WS connection right now — drives the "online" dot
+// on the admin Users pages. A valid session token doesn't mean the tab is open; this does.
+function getConnectedUsernames() {
+  if (!wss) return new Set();
+  const usernames = new Set();
+  wss.clients.forEach((ws) => {
+    if (ws.readyState === WebSocket.OPEN && ws.username) usernames.add(ws.username);
+  });
+  return usernames;
+}
+
 function closeWebSocket() {
   if (!wss) return;
   const msg = JSON.stringify({ type: 'server_shutdown' });
@@ -141,4 +152,4 @@ function closeWebSocket() {
   wss.close();
 }
 
-module.exports = { initWebSocket, broadcast, broadcastToOrg, getClientCount, closeWebSocket };
+module.exports = { initWebSocket, broadcast, broadcastToOrg, getClientCount, getConnectedUsernames, closeWebSocket };

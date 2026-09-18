@@ -1,8 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Server, Plus, Users2, ArrowRightLeft, ShieldCheck, ShieldOff, Pencil, Trash2, Save, X } from 'lucide-react';
 import { adminFetchOrgs, adminCreateOrg, adminRenameOrg, adminDeleteOrg, authUsers, authSetUserOrg, authSetPlatformAdmin } from '../../utils/api.js';
 import { useAdminFetch } from '../../hooks/useAdminFetch.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { normTs } from '../../utils/time.js';
+
+function fmtLastLogin(ts) {
+  if (!ts) return 'Never logged in';
+  const normalized = normTs(ts);
+  const sec = Math.floor((Date.now() - new Date(normalized).getTime()) / 1000);
+  if (sec < 60)    return `${sec}s ago`;
+  if (sec < 3600)  return `${Math.floor(sec/60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec/3600)}h ago`;
+  if (sec < 86400 * 30) return `${Math.floor(sec/86400)}d ago`;
+  return new Date(normalized).toLocaleDateString();
+}
 
 function Flash({ msg }) {
   if (!msg) return null;
@@ -25,6 +37,12 @@ export default function Organizations() {
   const { data: usersRaw, loading: usersLoading, reload: reloadUsers } = useAdminFetch(() => authUsers(), []);
   const orgs  = Array.isArray(orgsRaw) ? orgsRaw : [];
   const users = Array.isArray(usersRaw) ? usersRaw : [];
+
+  // Keep the online/offline dot current — same 15s cadence as the SDR Clients page.
+  useEffect(() => {
+    const timer = setInterval(reloadUsers, 15_000);
+    return () => clearInterval(timer);
+  }, [reloadUsers]);
 
   const [newOrgName, setNewOrgName] = useState('');
   const [msg, setMsg] = useState(null);
@@ -159,7 +177,13 @@ export default function Organizations() {
                 <div style={{ fontFamily:'monospace', fontSize:'0.85rem', color:'var(--text-1)' }}>
                   {u.username}{u.username === me?.username && <span style={{ fontSize:'0.65rem', color:'var(--accent-green)', marginLeft:'0.4rem' }}>(you)</span>}
                 </div>
-                <div style={{ fontSize:'0.7rem', color:'var(--text-3)' }}>{u.role}{u.is_platform_admin ? ' · platform admin' : ''}</div>
+                <div style={{ fontSize:'0.7rem', color:'var(--text-3)' }}>{u.role}{u.is_platform_admin ? ' · platform admin' : ''}{u.org_name ? ` · ${u.org_name}` : ''}</div>
+                <div style={{ fontSize:'0.7rem', display:'flex', alignItems:'center', gap:'0.35rem',
+                  color: u.online ? 'var(--accent-green)' : 'var(--text-3)' }}>
+                  <span style={{ width:'6px', height:'6px', borderRadius:'50%', flexShrink:0,
+                    background: u.online ? 'var(--accent-green)' : 'var(--text-3)' }} />
+                  {u.online ? 'Online' : `Last seen ${fmtLastLogin(u.last_login)}`}
+                </div>
               </div>
               <select value={u.org_id || ''} onChange={e => handleMove(u.id, e.target.value)}
                 style={{ background:'var(--bg-3)', border:'1px solid var(--border)', color:'var(--text-2)',
