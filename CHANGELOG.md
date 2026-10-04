@@ -24,6 +24,8 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Brute-force protection on login** — `/auth/login` allows 10 failed attempts per 15 minutes per IP and per username; forgot-password 5 requests per 15 minutes per IP and 3 per hour per username; reset-password and invite sign-up are capped per IP too (`express-rate-limit`). New `TRUST_PROXY` setting so the limits see the real client IP behind a reverse proxy
 - **Minimum password length raised from 6 to 10 characters** for every newly set password (existing passwords keep working). A `DEFAULT_ADMIN_PASS` shorter than that is ignored in favour of a random one
 - Login with an unknown username now takes as long as with a wrong password, so response time no longer reveals which usernames exist
+- **Request bodies capped at 1 MB** — every JSON body was parsed with a 500 MB limit before any authentication, so anyone could exhaust the server's memory with a few requests. Only backup restore still accepts large uploads, and only after the platform-admin check. The unused global raw-body parser is gone; oversized or malformed bodies get a JSON error
+- **CORS restricted** — the API reflected any origin (with credentials). Cross-origin access is now limited to `CORS_ORIGINS` (default: the native app's `https://localhost` / `capacitor://localhost`); the web UI is same-origin and unaffected
 
 ### Fixed
 - Changing your password from the profile panel always failed (the request sent the wrong field names)

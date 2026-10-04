@@ -28,6 +28,7 @@ const apiRouter   = require('./routes/api');
 const adminRouter = require('./routes/admin');
 const authRouter  = require('./routes/auth');
 const backupRouter = require('./routes/backup');
+const { RESTORE_PATH } = backupRouter;
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -62,12 +63,26 @@ async function main() {
   const trustProxy = process.env.TRUST_PROXY || 'loopback, linklocal, uniquelocal';
   app.set('trust proxy', trustProxy === 'true' ? true : trustProxy === 'false' ? false
     : /^\d+$/.test(trustProxy) ? parseInt(trustProxy, 10) : trustProxy);
-  app.use(cors({ origin: true, credentials: true }));
+  // Cross-origin access only for the configured origins — the web UI itself is same-origin
+  // and needs none. Default covers the native app's WebView (Capacitor: https://localhost
+  // on Android, capacitor://localhost on iOS). Auth is a bearer header, never cookies, so
+  // credentials stay off.
+  const corsOrigins = (process.env.CORS_ORIGINS || 'https://localhost,capacitor://localhost')
+    .split(',').map(o => o.trim()).filter(Boolean);
+  app.use(cors({ origin: corsOrigins }));
   // Pin the browser default explicitly: cross-origin requests (map tiles, Google Maps links)
   // only ever see our origin, never a full URL — which can carry a ?reset= token.
   app.use((_req, res, next) => { res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin'); next(); });
-  app.use(express.json({ limit: '500mb' }));
-  app.use(express.raw({ type: 'application/octet-stream', limit: '500mb' }));
+  // 1 MB for every JSON body — this runs before any auth check, so a large limit here would
+  // let anyone exhaust memory. The only big upload, backup restore, is skipped here and
+  // parsed by its own route after the platform-admin check (see routes/backup.js).
+  const jsonBody = express.json({ limit: '1mb' });
+  app.use((req, res, next) => (req.path === RESTORE_PATH ? next() : jsonBody(req, res, next)));
+  app.use((err, _req, res, next) => {
+    if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request body too large' });
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body' });
+    next(err);
+  });
 
   // Auth routes (public — login, setup check)
   app.use('/auth', authRouter);
