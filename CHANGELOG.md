@@ -18,6 +18,11 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Reset tokens now actually expire** after 1 hour, are single-use (using one invalidates all other outstanding links for that user), and are stored only as a SHA-256 hash in a new `password_resets` table. Outstanding legacy tokens are dropped on upgrade
 - Reset token is removed from the address bar as soon as the reset page loads; `Referrer-Policy: strict-origin-when-cross-origin` is now sent explicitly
 - **Org admins can no longer take over a platform admin** — an org admin could reset the password, change the email, change the role of, or delete a platform admin in the same organization (the default setup), gaining instance-wide access. Platform admin accounts can now only be managed by platform admins; the role endpoint also only accepts `admin`/`editor`/`viewer`
+- **Sessions are now revocable and always current** — role, organization and platform-admin status were copied into the session at login and kept for 7 days. They are now read from the user's current record on every request, so demotions, org moves and deletions apply immediately. Changing your password logs out all your other sessions; an admin reset or emailed reset logs the user out everywhere. Open WebSocket connections are re-checked every 30 s and closed when the session is gone or the user's org/platform access changed
+- **Session tokens are stored hashed** — the `sessions` table is replaced by `auth_sessions`, keyed by SHA-256 of the token. Active sessions are migrated on upgrade, so nobody is logged out
+
+### Fixed
+- Changing your password from the profile panel always failed (the request sent the wrong field names)
 
 ## [2.5.0] — 2026-08-12
 

@@ -4,6 +4,7 @@ const fs   = require('fs');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { buildDongleSourceId } = require('../utils/dongleSource');
+const { hashToken } = require('../utils/tokens');
 
 const DB_PATH = process.env.DB_PATH || './data/pagermonitor.db';
 let db;
@@ -149,15 +150,6 @@ function initDb() {
       enabled INTEGER NOT NULL DEFAULT 1,
       secret  TEXT
     );
-
-    CREATE TABLE IF NOT EXISTS sessions (
-      token    TEXT    PRIMARY KEY,
-      user_id  INTEGER NOT NULL,
-      username TEXT    NOT NULL,
-      role     TEXT    NOT NULL,
-      expires  INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires);
   `);
 
   _migrate();
@@ -300,11 +292,27 @@ function _migrate() {
     db.exec('ALTER TABLE webhooks ADD COLUMN org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE');
     logger.info('Migration: added org_id to webhooks');
   }
-  const sessionColumns = db.prepare("PRAGMA table_info(sessions)").all().map(c => c.name);
-  if (!sessionColumns.includes('org_id')) {
-    db.exec('ALTER TABLE sessions ADD COLUMN org_id INTEGER');
-    db.exec('ALTER TABLE sessions ADD COLUMN is_platform_admin INTEGER NOT NULL DEFAULT 0');
-    logger.info('Migration: added org_id/is_platform_admin to sessions');
+  // Sessions — keyed by the SHA-256 of the bearer token instead of the raw token, and
+  // holding only the user id: role/org/platform-admin are read live from users on every
+  // request (see getSessionUser), so changes take effect immediately. Replaces the legacy
+  // `sessions` table; its active sessions are carried over hashed, so nobody is logged out.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token_hash TEXT    PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires    INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_user    ON auth_sessions(user_id);
+  `);
+  if (tables.includes('sessions')) {
+    const rows = db.prepare('SELECT token, user_id, expires FROM sessions WHERE expires > ? AND user_id IN (SELECT id FROM users)').all(Date.now());
+    const insert = db.prepare('INSERT OR IGNORE INTO auth_sessions (token_hash, user_id, expires) VALUES (?, ?, ?)');
+    db.transaction(() => {
+      for (const r of rows) insert.run(hashToken(r.token), r.user_id, r.expires);
+      db.exec('DROP TABLE sessions');
+    })();
+    logger.info(`Migration: moved ${rows.length} active session(s) to auth_sessions (tokens now stored hashed)`);
   }
 
   // Password reset tokens — previously a JSON map in settings.pw_reset_tokens holding the
@@ -1416,15 +1424,25 @@ function getStats() {
 }
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
-function saveDbSession(token, userId, username, role, expires, orgId, isPlatformAdmin) {
-  getDb().prepare('INSERT OR REPLACE INTO sessions (token,user_id,username,role,expires,org_id,is_platform_admin) VALUES (?,?,?,?,?,?,?)')
-    .run(token, userId, username, role, expires, orgId ?? null, isPlatformAdmin ? 1 : 0);
+function saveDbSession(tokenHash, userId, expires) {
+  getDb().prepare('INSERT INTO auth_sessions (token_hash, user_id, expires) VALUES (?, ?, ?)').run(tokenHash, userId, expires);
 }
-function deleteDbSession(token) {
-  getDb().prepare('DELETE FROM sessions WHERE token=?').run(token);
+function deleteDbSession(tokenHash) {
+  getDb().prepare('DELETE FROM auth_sessions WHERE token_hash = ?').run(tokenHash);
 }
-function loadActiveSessions() {
-  return getDb().prepare('SELECT * FROM sessions WHERE expires > ?').all(Date.now());
+// Every session of a user, optionally keeping one (the caller's own, e.g. after changing
+// their own password). Returns how many were revoked.
+function deleteUserSessions(userId, exceptTokenHash = null) {
+  return getDb().prepare('DELETE FROM auth_sessions WHERE user_id = ? AND token_hash IS NOT ?').run(userId, exceptTokenHash).changes;
+}
+// The session's expiry joined with the user's *current* row — authorization always uses
+// live role/org/platform-admin values, never a snapshot taken at login.
+function getSessionUser(tokenHash) {
+  return getDb().prepare(`
+    SELECT s.expires, u.id, u.username, u.role, u.org_id, u.is_platform_admin
+    FROM auth_sessions s JOIN users u ON u.id = s.user_id
+    WHERE s.token_hash = ?
+  `).get(tokenHash);
 }
 
 // ── Password resets ───────────────────────────────────────────────────────────
@@ -1483,7 +1501,7 @@ function deleteUserLocation(userId) {
 }
 
 function pruneExpiredSessions() {
-  getDb().prepare('DELETE FROM sessions WHERE expires <= ?').run(Date.now());
+  getDb().prepare('DELETE FROM auth_sessions WHERE expires <= ?').run(Date.now());
 }
 
 module.exports = {
@@ -1511,7 +1529,7 @@ module.exports = {
   addAuditLog, getAuditLog,
   getStats,
   getMessageNotes, addMessageNote, deleteMessageNote, getNoteCounts,
-  saveDbSession, deleteDbSession, loadActiveSessions, pruneExpiredSessions,
+  saveDbSession, deleteDbSession, deleteUserSessions, getSessionUser, pruneExpiredSessions,
   savePasswordReset, consumePasswordReset,
   upsertUserLocation, getUserLocations, deleteUserLocation, enrichSourceLabels, getLocalDongleLabel,
   getSourceOptions,

@@ -246,7 +246,7 @@ export default function UserProfile({ onClose }) {
     if (pw.next !== pw.confirm) return flashPw('err', t('userProfile.passwordsMismatch'));
     setPwSaving(true);
     try {
-      const r = await api('POST', '/auth/change-password', { current: pw.current, next: pw.next });
+      const r = await api('POST', '/auth/change-password', { oldPassword: pw.current, newPassword: pw.next });
       if (r.ok) { flashPw('ok', t('userProfile.passwordChanged')); setPw({ current:'', next:'', confirm:'' }); }
       else flashPw('err', r.error || t('userProfile.failed'));
     } catch (e) { flashPw('err', e.message); }

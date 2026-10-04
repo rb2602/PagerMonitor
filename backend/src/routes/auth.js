@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const { register, login, destroySession, requireAuth, requireAdmin, requirePlatformAdmin,
-        changePassword, adminSetPassword, manageUserError } = require('../services/auth');
+        changePassword, adminSetPassword, manageUserError, extractToken } = require('../services/auth');
 const {
   getUsers, getUserById, countUsers, deleteUser, updateUserRole, updateUserEmail, setUserOrg,
   setUserPlatformAdmin, getInviteByCode, consumeInvite, addAuditLog, getDb, getOrganization,
@@ -53,8 +53,7 @@ router.post('/join', async (req, res) => {
 
 // POST /auth/logout
 router.post('/logout', requireAuth, (req, res) => {
-  const token = (req.headers['authorization'] || '').replace('Bearer ', '');
-  destroySession(token);
+  destroySession(extractToken(req));
   res.json({ ok: true });
 });
 
@@ -74,7 +73,11 @@ router.get('/me', requireAuth, (req, res) => {
 router.post('/change-password', requireAuth, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
-    await changePassword(req.session.userId, oldPassword, newPassword);
+    if (typeof oldPassword !== 'string' || typeof newPassword !== 'string') {
+      return res.status(400).json({ error: 'Current and new password required' });
+    }
+    // Every other session of this user is logged out; the one making the change stays.
+    await changePassword(req.session.userId, oldPassword, newPassword, extractToken(req));
     res.json({ ok: true });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });

@@ -2,50 +2,45 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const db     = require('./database');
 const logger = require('../utils/logger');
+const { hashToken } = require('../utils/tokens');
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const sessions = new Map(); // token → { userId, username, role, orgId, isPlatformAdmin, expires }
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
-function initSessions() {
-  try {
-    const rows = db.loadActiveSessions();
-    for (const r of rows) sessions.set(r.token, {
-      userId: r.user_id, username: r.username, role: r.role,
-      orgId: r.org_id ?? null, isPlatformAdmin: !!r.is_platform_admin, expires: r.expires,
-    });
-    logger.info(`Loaded ${rows.length} active session(s) from DB`);
-  } catch (e) {
-    logger.warn(`Could not load sessions from DB: ${e.message}`);
-  }
-}
-
+// Stored in auth_sessions as SHA-256(token) → user id. There is deliberately no in-memory
+// snapshot of role/org/platform-admin: validateSession reads the user's current row on
+// every call, so demotions, org moves and deletions take effect on the very next request.
 function createSession(user) {
-  const token   = crypto.randomBytes(32).toString('hex');
-  const expires = Date.now() + SESSION_TTL_MS;
-  const orgId = user.org_id ?? null;
-  const isPlatformAdmin = !!user.is_platform_admin;
-  sessions.set(token, { userId: user.id, username: user.username, role: user.role, orgId, isPlatformAdmin, expires });
-  try { db.saveDbSession(token, user.id, user.username, user.role, expires, orgId, isPlatformAdmin); } catch (_) {}
+  const token = crypto.randomBytes(32).toString('hex');
+  db.saveDbSession(hashToken(token), user.id, Date.now() + SESSION_TTL_MS);
   return token;
 }
 
 function validateSession(token) {
-  if (!token) return null;
-  const s = sessions.get(token);
-  if (!s) return null;
-  if (Date.now() > s.expires) { sessions.delete(token); try { db.deleteDbSession(token); } catch (_) {} return null; }
-  return s;
+  if (!token || typeof token !== 'string') return null;
+  const tokenHash = hashToken(token);
+  const row = db.getSessionUser(tokenHash);
+  if (!row) return null;
+  if (Date.now() > row.expires) { db.deleteDbSession(tokenHash); return null; }
+  return {
+    userId: row.id, username: row.username, role: row.role,
+    orgId: row.org_id ?? null, isPlatformAdmin: !!row.is_platform_admin, expires: row.expires,
+  };
 }
 
 function destroySession(token) {
-  sessions.delete(token);
-  try { db.deleteDbSession(token); } catch (_) {}
+  if (token) db.deleteDbSession(hashToken(token));
+}
+
+// Logs a user out everywhere — after a password change/reset, so a stolen token stops
+// working. keepToken (the caller's own session) survives when a user changes their own
+// password. Open WebSocket connections are re-validated by the heartbeat in websocket.js.
+function revokeUserSessions(userId, keepToken = null) {
+  const n = db.deleteUserSessions(userId, keepToken ? hashToken(keepToken) : null);
+  if (n) logger.info(`Revoked ${n} session(s) of user id=${userId}`);
 }
 
 setInterval(() => {
-  const now = Date.now();
-  for (const [tok, s] of sessions) if (now > s.expires) sessions.delete(tok);
   try { db.pruneExpiredSessions(); } catch (_) {}
 }, 60 * 60 * 1000);
 
@@ -89,18 +84,22 @@ async function login(username, password) {
   };
 }
 
-async function changePassword(userId, oldPassword, newPassword) {
+// keepToken: the session making the change stays logged in; every other one is revoked.
+async function changePassword(userId, oldPassword, newPassword, keepToken) {
   const user = db.getDb().prepare('SELECT * FROM users WHERE id = ?').get(userId);
   if (!user) throw new Error('User not found');
   const ok = await bcrypt.compare(oldPassword, user.password);
   if (!ok)  throw new Error('Current password is incorrect');
   if (newPassword.length < 6) throw new Error('New password must be at least 6 characters');
   db.updateUserPassword(userId, await bcrypt.hash(newPassword, 10));
+  revokeUserSessions(userId, keepToken);
 }
 
+// Admin reset or emailed reset link — the user is logged out on every device.
 async function adminSetPassword(userId, newPassword) {
   if (newPassword.length < 6) throw new Error('Password must be at least 6 characters');
   db.updateUserPassword(userId, await bcrypt.hash(newPassword, 10));
+  revokeUserSessions(userId);
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -179,7 +178,7 @@ async function ensureDefaultAdmin() {
 
 module.exports = {
   register, login, changePassword, adminSetPassword,
-  createSession, validateSession, destroySession, initSessions, getPublicOrgId,
+  createSession, validateSession, destroySession, revokeUserSessions, getPublicOrgId,
   requireAuth, requireAdmin, requireEditor, requirePlatformAdmin, ensureDefaultAdmin,
-  manageUserError,
+  manageUserError, extractToken,
 };

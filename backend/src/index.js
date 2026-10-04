@@ -19,7 +19,7 @@ const napTraffic                = require('./services/napTraffic');
 const interventions              = require('./services/interventions');
 const vecjiObseg                 = require('./services/vecjiObseg');
 const { loadSdrConfigIntoEnv } = require('./services/config');
-const { ensureDefaultAdmin, initSessions } = require('./services/auth');
+const { ensureDefaultAdmin } = require('./services/auth');
 const { initWebPush } = require('./services/webpush');
 const { initFcm } = require('./services/fcmPush');
 const logger                = require('./utils/logger');
@@ -38,9 +38,6 @@ async function main() {
 
   // Init database (creates tables including users, settings, highlight_rules)
   initDb();
-
-  // Restore sessions persisted before last restart — users stay logged in
-  initSessions();
 
   // Load persisted SDR config from DB into process.env (overrides .env defaults)
   loadSdrConfigIntoEnv();
