@@ -17,6 +17,7 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Password reset links can no longer be redirected** — links were built from the request's `Origin`/`Host` header, so anyone could trigger a genuine reset email pointing at their own domain. They now use the new **Public URL** setting (Admin → Site settings); password reset stays disabled until it is set
 - **Reset tokens now actually expire** after 1 hour, are single-use (using one invalidates all other outstanding links for that user), and are stored only as a SHA-256 hash in a new `password_resets` table. Outstanding legacy tokens are dropped on upgrade
 - Reset token is removed from the address bar as soon as the reset page loads; `Referrer-Policy: strict-origin-when-cross-origin` is now sent explicitly
+- **Org admins can no longer take over a platform admin** — an org admin could reset the password, change the email, change the role of, or delete a platform admin in the same organization (the default setup), gaining instance-wide access. Platform admin accounts can now only be managed by platform admins; the role endpoint also only accepts `admin`/`editor`/`viewer`
 
 ## [2.5.0] — 2026-08-12
 

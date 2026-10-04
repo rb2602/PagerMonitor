@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const { register, login, destroySession, requireAuth, requireAdmin, requirePlatformAdmin,
-        changePassword, adminSetPassword } = require('../services/auth');
+        changePassword, adminSetPassword, manageUserError } = require('../services/auth');
 const {
   getUsers, getUserById, countUsers, deleteUser, updateUserRole, updateUserEmail, setUserOrg,
   setUserPlatformAdmin, getInviteByCode, consumeInvite, addAuditLog, getDb, getOrganization,
@@ -9,14 +9,6 @@ const {
 } = require('../services/database');
 const logger = require('../utils/logger');
 
-// A caller may manage a target user if they're platform admin (any user, any org) or
-// the target belongs to their own org. Org-admins can never reach another org's users
-// even by guessing an id.
-function ownsUser(req, targetId) {
-  if (req.session.isPlatformAdmin) return true;
-  const target = getUserById(targetId);
-  return !!target && target.org_id === req.session.orgId;
-}
 
 // POST /auth/login
 router.post('/login', async (req, res) => {
@@ -115,7 +107,9 @@ router.get('/users', requireAdmin, (req, res) => {
 router.put('/users/:id/role', requireAdmin, (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    if (!ownsUser(req, id)) return res.status(403).json({ error: 'Cannot manage a user outside your organization' });
+    const denied = manageUserError(req.session, getUserById(id));
+    if (denied) return res.status(denied.status).json({ error: denied.error });
+    if (!['admin', 'editor', 'viewer'].includes(req.body.role)) return res.status(400).json({ error: 'Role must be admin, editor or viewer' });
     updateUserRole(id, req.body.role);
     addAuditLog(req.session.username, 'user.role_change', `id=${id} role=${req.body.role}`, req.session.orgId);
     res.json({ ok: true });
@@ -156,7 +150,8 @@ router.put('/users/:id/platform-admin', requirePlatformAdmin, (req, res) => {
 router.post('/users/:id/reset-password', requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    if (!ownsUser(req, id)) return res.status(403).json({ error: 'Cannot manage a user outside your organization' });
+    const denied = manageUserError(req.session, getUserById(id));
+    if (denied) return res.status(denied.status).json({ error: denied.error });
     await adminSetPassword(id, req.body.password);
     addAuditLog(req.session.username, 'user.password_reset', `id=${id}`, req.session.orgId);
     res.json({ ok: true });
@@ -168,8 +163,13 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (id === req.session.userId) return res.status(400).json({ error: 'Cannot delete yourself' });
-    if (!ownsUser(req, id)) return res.status(403).json({ error: 'Cannot manage a user outside your organization' });
     const target = getUserById(id);
+    const denied = manageUserError(req.session, target);
+    if (denied) return res.status(denied.status).json({ error: denied.error });
+    if (target.is_platform_admin) {
+      const remaining = getDb().prepare('SELECT COUNT(*) as n FROM users WHERE is_platform_admin = 1 AND id != ?').get(id).n;
+      if (remaining === 0) return res.status(400).json({ error: 'Cannot delete the last platform admin' });
+    }
     deleteUser(id);
     addAuditLog(req.session.username, 'user.delete', `id=${id} username=${target?.username || '?'}`, req.session.orgId);
     res.json({ ok: true });

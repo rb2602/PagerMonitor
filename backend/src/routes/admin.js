@@ -6,7 +6,7 @@ const path    = require('path');
 const { execSync, spawn } = require('child_process');
 const { version } = require('../../package.json');
 
-const { requireAdmin, requireEditor, requirePlatformAdmin } = require('../services/auth');
+const { requireAdmin, requireEditor, requirePlatformAdmin, manageUserError } = require('../services/auth');
 const { startSdrPipeline, stopSdrPipeline, restartSdrPipeline, getStatus, getLogs } = require('../services/sdr');
 const { listAttachedDongles } = require('../services/rtlDevices');
 const { getDb, getStats, getMessageStats,
@@ -1049,10 +1049,8 @@ router.get('/user-notif-prefs', adminOnly, (req, res) => {
 router.put('/user-notif-prefs/:userId', adminOnly, (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
-    if (!req.session.isPlatformAdmin) {
-      const target = getUserById(userId);
-      if (!target || target.org_id !== req.session.orgId) return res.status(403).json({ error: 'Cannot manage a user outside your organization' });
-    }
+    const denied = manageUserError(req.session, getUserById(userId));
+    if (denied) return res.status(denied.status).json({ error: denied.error });
     setUserNotifPrefs(userId, req.body);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1061,10 +1059,8 @@ router.put('/user-notif-prefs/:userId', adminOnly, (req, res) => {
 router.put('/users/:id/email', adminOnly, (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    if (!req.session.isPlatformAdmin) {
-      const target = getUserById(id);
-      if (!target || target.org_id !== req.session.orgId) return res.status(403).json({ error: 'Cannot manage a user outside your organization' });
-    }
+    const denied = manageUserError(req.session, getUserById(id));
+    if (denied) return res.status(denied.status).json({ error: denied.error });
     updateUserEmail(id, req.body.email);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }

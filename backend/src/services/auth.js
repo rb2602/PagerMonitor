@@ -154,6 +154,18 @@ function requirePlatformAdmin(req, res, next) {
   next();
 }
 
+// Whether `session` may manage (role, email, password, notification prefs, delete) the
+// user row `target`. Returns null if allowed, else { status, error }. Platform admins may
+// manage anyone; org admins only users of their own org — and never a platform admin,
+// even one in their own org: resetting that account's password or email would otherwise
+// hand an org admin the instance-wide platform tier.
+function manageUserError(session, target) {
+  if (session.isPlatformAdmin) return target ? null : { status: 404, error: 'User not found' };
+  if (!target || target.org_id !== session.orgId) return { status: 403, error: 'Cannot manage a user outside your organization' };
+  if (target.is_platform_admin) return { status: 403, error: 'Only a platform admin can manage a platform admin account' };
+  return null;
+}
+
 // ── First-run: create default admin + org if no users exist ──────────────────
 async function ensureDefaultAdmin() {
   if (db.countUsers() === 0) {
@@ -169,4 +181,5 @@ module.exports = {
   register, login, changePassword, adminSetPassword,
   createSession, validateSession, destroySession, initSessions, getPublicOrgId,
   requireAuth, requireAdmin, requireEditor, requirePlatformAdmin, ensureDefaultAdmin,
+  manageUserError,
 };

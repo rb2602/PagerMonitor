@@ -30,6 +30,10 @@ function Flash({ msg }) {
 }
 
 function UserRow({ u, me, onRole, onDelete, onEdit }) {
+  const isMe = u.username === me?.username;
+  // Org admins can't manage a platform admin's account (enforced server-side too).
+  const locked = !!u.is_platform_admin && !me?.isPlatformAdmin;
+  const lockedTitle = locked ? 'Only a platform admin can manage this account' : undefined;
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.6rem 0',
       borderBottom:'1px solid var(--border-soft)', flexWrap:'wrap' }}>
@@ -37,7 +41,8 @@ function UserRow({ u, me, onRole, onDelete, onEdit }) {
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ fontFamily:'monospace', fontSize:'0.85rem', color:'var(--text-1)', display:'flex', alignItems:'center', gap:'0.4rem' }}>
           {u.username}
-          {u.username === me?.username && <span style={{ fontSize:'0.65rem', color:'var(--accent-green)' }}>(you)</span>}
+          {isMe && <span style={{ fontSize:'0.65rem', color:'var(--accent-green)' }}>(you)</span>}
+          {!!u.is_platform_admin && <span style={{ fontSize:'0.65rem', color:'var(--accent-amber)' }}>platform admin</span>}
         </div>
         {u.email && (
           <div style={{ fontSize:'0.7rem', color:'var(--text-3)', fontFamily:'monospace', display:'flex', alignItems:'center', gap:'0.25rem' }}>
@@ -52,20 +57,20 @@ function UserRow({ u, me, onRole, onDelete, onEdit }) {
         </div>
       </div>
       <select value={u.role || 'viewer'} onChange={e => onRole(u.id, e.target.value)}
-        disabled={u.username === me?.username}
+        disabled={isMe || locked} title={lockedTitle}
         style={{ background:'var(--bg-3)', border:'1px solid var(--border)', color:'var(--text-2)',
           borderRadius:'0.35rem', padding:'0.2rem 0.4rem', fontSize:'0.75rem', cursor:'pointer', flexShrink:0 }}>
         <option value="admin">admin</option>
         <option value="editor">editor</option>
         <option value="viewer">viewer</option>
       </select>
-      <button onClick={() => onEdit(u)} title="Edit email / reset password"
-        style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-3)', padding:'0.2rem' }}>
+      <button onClick={() => onEdit(u)} disabled={locked} title={lockedTitle || 'Edit email / reset password'}
+        style={{ background:'none', border:'none', cursor: locked ? 'default' : 'pointer', color:'var(--text-3)', padding:'0.2rem', opacity: locked ? 0.4 : 1 }}>
         <Pencil size={13}/>
       </button>
-      <button onClick={() => onDelete(u.id, u.username)} disabled={u.username === me?.username}
+      <button onClick={() => onDelete(u.id, u.username)} disabled={isMe || locked} title={lockedTitle}
         style={{ background:'none', border:'none', cursor:'pointer', padding:'0.2rem',
-          color: u.username === me?.username ? 'var(--text-3)' : 'var(--accent-red)' }}>
+          color: isMe || locked ? 'var(--text-3)' : 'var(--accent-red)' }}>
         <Trash2 size={13}/>
       </button>
     </div>
