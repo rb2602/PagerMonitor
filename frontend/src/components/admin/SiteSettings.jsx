@@ -645,8 +645,9 @@ export default function SiteSettings({ onResetMap }) {
             </div>
           </label>
           <div style={{ fontSize:'0.72rem', color:'var(--text-3)', marginTop:'0.5rem', marginLeft:'1.4rem', lineHeight:1.6 }}>
-            When enabled: the live feed, map, and search are visible without login.
-            Settings panel, user management, and notification settings remain protected.
+            When enabled: the live feed, map, archive, and search are visible without login.
+            Settings panel, user management, notification settings, message notes, and the
+            archive CSV export remain protected.
             Visitors see a <span style={{ color:'var(--accent-blue)' }}>Log in</span> button to access full features.
           </div>
         </div>

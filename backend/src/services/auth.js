@@ -120,11 +120,21 @@ function extractToken(req) {
 }
 
 function requireAuth(req, res, next) {
+  // A valid login always wins — in public mode too, so a logged-in user keeps seeing their
+  // own org and their own per-user data rather than the anonymous guest view.
+  const s = validateSession(extractToken(req));
+  if (s) { req.session = s; return next(); }
   // Allow unauthenticated GET requests when public mode is active
   if (req.publicAccess && req.method === 'GET') {
     req.session = { userId: null, username: 'guest', role: 'viewer', orgId: getPublicOrgId(), isPlatformAdmin: false };
     return next();
   }
+  return res.status(401).json({ error: 'Not authenticated' });
+}
+
+// Like requireAuth, but never admits public-mode guests — for per-user data, internal
+// notes and bulk exports, which stay behind a login even when the feed itself is public.
+function requireUser(req, res, next) {
   const s = validateSession(extractToken(req));
   if (!s) return res.status(401).json({ error: 'Not authenticated' });
   req.session = s;
@@ -194,6 +204,6 @@ async function ensureDefaultAdmin() {
 module.exports = {
   register, prepareNewUser, login, changePassword, adminSetPassword,
   createSession, validateSession, destroySession, revokeUserSessions, getPublicOrgId,
-  requireAuth, requireAdmin, requireEditor, requirePlatformAdmin, ensureDefaultAdmin,
+  requireAuth, requireUser, requireAdmin, requireEditor, requirePlatformAdmin, ensureDefaultAdmin,
   manageUserError, extractToken, MIN_PASSWORD_LENGTH,
 };

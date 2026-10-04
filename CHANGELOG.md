@@ -29,8 +29,10 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Invite sign-up is atomic** — the account was created before the invite's use was counted, so two people racing the last use of a limited invite could both end up with an account. User creation and invite use now happen in one transaction; a failed sign-up (e.g. username taken) no longer uses up the invite
 - Client key (remote SDR clients, audio-source WebSocket) is compared in constant time
 - `docker/nginx-standalone.conf` logs requests without query strings, so session tokens (`/ws?token=`), reset tokens and invite codes no longer end up in the access log; HSTS is included as a commented-out option for setups with a trusted certificate
+- **Public mode no longer exposes internal data** — message notes, the archive CSV export, per-user last-seen and the push device list now require a login even when public read-only mode is on; the export button is hidden for guests
 
 ### Fixed
+- In public mode, logged-in users were served the anonymous guest view on every read request (public org, no per-user data); a valid login now always takes precedence
 - Changing your password from the profile panel always failed (the request sent the wrong field names)
 
 ## [2.5.0] — 2026-08-12
