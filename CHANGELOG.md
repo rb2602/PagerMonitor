@@ -26,6 +26,9 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - Login with an unknown username now takes as long as with a wrong password, so response time no longer reveals which usernames exist
 - **Request bodies capped at 1 MB** — every JSON body was parsed with a 500 MB limit before any authentication, so anyone could exhaust the server's memory with a few requests. Only backup restore still accepts large uploads, and only after the platform-admin check. The unused global raw-body parser is gone; oversized or malformed bodies get a JSON error
 - **CORS restricted** — the API reflected any origin (with credentials). Cross-origin access is now limited to `CORS_ORIGINS` (default: the native app's `https://localhost` / `capacitor://localhost`); the web UI is same-origin and unaffected
+- **Invite sign-up is atomic** — the account was created before the invite's use was counted, so two people racing the last use of a limited invite could both end up with an account. User creation and invite use now happen in one transaction; a failed sign-up (e.g. username taken) no longer uses up the invite
+- Client key (remote SDR clients, audio-source WebSocket) is compared in constant time
+- `docker/nginx-standalone.conf` logs requests without query strings, so session tokens (`/ws?token=`), reset tokens and invite codes no longer end up in the access log; HSTS is included as a commented-out option for setups with a trusted certificate
 
 ### Fixed
 - Changing your password from the profile panel always failed (the request sent the wrong field names)

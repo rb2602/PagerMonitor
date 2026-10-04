@@ -62,12 +62,18 @@ function getPublicOrgId() {
 }
 
 // ── User ops ──────────────────────────────────────────────────────────────────
-async function register(username, password, role = 'viewer', orgId = null, isPlatformAdmin = false) {
-  if (!username || username.length < 2) throw new Error('Username must be at least 2 characters');
+// Validates a new account and returns its password hash, without creating it — callers
+// that need the insert inside a larger transaction (invite sign-up) do that themselves.
+async function prepareNewUser(username, password, role) {
+  if (typeof username !== 'string' || username.length < 2) throw new Error('Username must be at least 2 characters');
   if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) throw new Error(PASSWORD_TOO_SHORT);
   if (!['admin', 'editor', 'viewer'].includes(role)) throw new Error('Role must be admin, editor or viewer');
   if (db.getUserByUsername(username)) throw new Error('Username already taken');
-  const hash = await bcrypt.hash(password, 10);
+  return bcrypt.hash(password, 10);
+}
+
+async function register(username, password, role = 'viewer', orgId = null, isPlatformAdmin = false) {
+  const hash = await prepareNewUser(username, password, role);
   const id   = db.createUser(username, hash, role, orgId, isPlatformAdmin);
   logger.info(`User registered: ${username} (${role}${isPlatformAdmin ? ', platform-admin' : ''}, org=${orgId})`);
   return id;
@@ -186,7 +192,7 @@ async function ensureDefaultAdmin() {
 }
 
 module.exports = {
-  register, login, changePassword, adminSetPassword,
+  register, prepareNewUser, login, changePassword, adminSetPassword,
   createSession, validateSession, destroySession, revokeUserSessions, getPublicOrgId,
   requireAuth, requireAdmin, requireEditor, requirePlatformAdmin, ensureDefaultAdmin,
   manageUserError, extractToken, MIN_PASSWORD_LENGTH,

@@ -1,11 +1,11 @@
 const express = require('express');
 const router  = express.Router();
-const { register, login, destroySession, requireAuth, requireAdmin, requirePlatformAdmin,
+const { register, prepareNewUser, login, destroySession, requireAuth, requireAdmin, requirePlatformAdmin,
         changePassword, adminSetPassword, manageUserError, extractToken, MIN_PASSWORD_LENGTH } = require('../services/auth');
 const { loginLimiters, forgotPasswordLimiters, resetPasswordLimiter, joinLimiter } = require('../utils/rateLimits');
 const {
   getUsers, getUserById, countUsers, deleteUser, updateUserRole, updateUserEmail, setUserOrg,
-  setUserPlatformAdmin, getInviteByCode, consumeInvite, addAuditLog, getDb, getOrganization,
+  setUserPlatformAdmin, getInviteByCode, inviteError, createUserFromInvite, addAuditLog, getDb, getOrganization,
   updateUserUiLanguage, getSetting,
 } = require('../services/database');
 const logger = require('../utils/logger');
@@ -33,20 +33,16 @@ router.post('/login', loginLimiters, async (req, res) => {
 router.post('/join', joinLimiter, async (req, res) => {
   try {
     const { code, username, password, email } = req.body;
-    if (!code) return res.status(400).json({ error: 'Invite code required' });
-    const invite = getInviteByCode(code);
-    if (!invite) return res.status(400).json({ error: 'Invalid invite code' });
-    if (invite.revoked) return res.status(400).json({ error: 'This invite has been revoked' });
-    if (invite.expires_at && new Date(invite.expires_at).getTime() < Date.now()) {
-      return res.status(400).json({ error: 'This invite has expired' });
-    }
-    if (invite.max_uses > 0 && invite.use_count >= invite.max_uses) {
-      return res.status(400).json({ error: 'This invite has reached its usage limit' });
-    }
+    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'Invite code required' });
+    // Early check for a friendly error before spending time on the password hash; the
+    // authoritative re-check happens inside createUserFromInvite's transaction.
+    const pending = getInviteByCode(code);
+    const invalid = inviteError(pending);
+    if (invalid) return res.status(400).json({ error: invalid });
 
-    const id = await register(username, password, invite.role, invite.org_id);
-    if (email) updateUserEmail(id, email);
-    consumeInvite(code, id); // atomic re-check + increment, guards the max_uses race
+    const hash = await prepareNewUser(username, password, pending.role);
+    const { userId, invite } = createUserFromInvite(code, username, hash, email);
+    logger.info(`User registered via invite: ${username} (${invite.role}, org=${invite.org_id}, id=${userId})`);
     addAuditLog(username, 'user.join_via_invite', `invite_id=${invite.id}`, invite.org_id);
 
     const result = await login(username, password);

@@ -8,4 +8,13 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
 
-module.exports = { hashToken };
+// Constant-time comparison for shared secrets (e.g. the client key). Comparing digests
+// keeps the timing independent of both the content and the length of the inputs.
+function safeEqual(a, b) {
+  return crypto.timingSafeEqual(
+    crypto.createHash('sha256').update(String(a)).digest(),
+    crypto.createHash('sha256').update(String(b)).digest(),
+  );
+}
+
+module.exports = { hashToken, safeEqual };

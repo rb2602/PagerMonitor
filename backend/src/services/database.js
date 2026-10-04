@@ -1055,19 +1055,31 @@ function getInviteByCode(code) { return getDb().prepare('SELECT * FROM invites W
 function listInvites(orgId) { return getDb().prepare('SELECT * FROM invites WHERE org_id=? ORDER BY id DESC').all(orgId); }
 function revokeInvite(id, orgId) { return getDb().prepare('UPDATE invites SET revoked=1 WHERE id=? AND org_id=?').run(id, orgId).changes; }
 
-// Atomic check-and-consume so two people racing the last use of a max_uses-limited
-// invite can't both succeed.
-function consumeInvite(code, userId) {
+// Why an invite row can't be used (null if it can).
+function inviteError(invite) {
+  if (!invite) return 'Invalid invite code';
+  if (invite.revoked) return 'This invite has been revoked';
+  if (invite.expires_at && new Date(invite.expires_at).getTime() < Date.now()) return 'This invite has expired';
+  if (invite.max_uses > 0 && invite.use_count >= invite.max_uses) return 'This invite has reached its usage limit';
+  return null;
+}
+
+// All-or-nothing: re-checks the invite, creates the user in its org/role and records the
+// use in one transaction — two people racing the last use of a max_uses-limited invite
+// can't both get an account, and a failed signup (e.g. username taken) doesn't use it up.
+function createUserFromInvite(code, username, passwordHash, email) {
   const d = getDb();
   return d.transaction(() => {
     const invite = d.prepare('SELECT * FROM invites WHERE code=?').get(code);
-    if (!invite) throw new Error('Invalid invite code');
-    if (invite.revoked) throw new Error('This invite has been revoked');
-    if (invite.expires_at && new Date(invite.expires_at).getTime() < Date.now()) throw new Error('This invite has expired');
-    if (invite.max_uses > 0 && invite.use_count >= invite.max_uses) throw new Error('This invite has reached its usage limit');
+    const invalid = inviteError(invite);
+    if (invalid) throw new Error(invalid);
+    let userId;
+    try { userId = createUser(username, passwordHash, invite.role, invite.org_id); }
+    catch (e) { if (e.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new Error('Username already taken'); throw e; }
+    if (email) updateUserEmail(userId, email);
     d.prepare('UPDATE invites SET use_count = use_count + 1 WHERE id=?').run(invite.id);
     d.prepare('INSERT INTO invite_uses (invite_id, user_id) VALUES (?, ?)').run(invite.id, userId);
-    return invite;
+    return { userId, invite };
   })();
 }
 
@@ -1512,7 +1524,7 @@ module.exports = {
   getAliases, upsertAlias, deleteAlias, bulkUpsertAliases, getAliasNameForCapcode,
   getSetting, setSetting,
   createOrganization, getOrganizations, getOrganization, renameOrganization, deleteOrganization,
-  createInvite, getInviteByCode, listInvites, revokeInvite, consumeInvite,
+  createInvite, getInviteByCode, listInvites, revokeInvite, inviteError, createUserFromInvite,
   getUsers, getUserById, getUserByUsername, createUser, updateUserPassword, updateUserRole, updateUserEmail,
   updateUserUiLanguage,
   deleteUser, touchUserLogin, countUsers, setUserOrg, setUserPlatformAdmin,
