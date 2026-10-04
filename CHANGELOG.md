@@ -21,6 +21,10 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 - **Sessions are now revocable and always current** — role, organization and platform-admin status were copied into the session at login and kept for 7 days. They are now read from the user's current record on every request, so demotions, org moves and deletions apply immediately. Changing your password logs out all your other sessions; an admin reset or emailed reset logs the user out everywhere. Open WebSocket connections are re-checked every 30 s and closed when the session is gone or the user's org/platform access changed
 - **Session tokens are stored hashed** — the `sessions` table is replaced by `auth_sessions`, keyed by SHA-256 of the token. Active sessions are migrated on upgrade, so nobody is logged out
 
+- **Brute-force protection on login** — `/auth/login` allows 10 failed attempts per 15 minutes per IP and per username; forgot-password 5 requests per 15 minutes per IP and 3 per hour per username; reset-password and invite sign-up are capped per IP too (`express-rate-limit`). New `TRUST_PROXY` setting so the limits see the real client IP behind a reverse proxy
+- **Minimum password length raised from 6 to 10 characters** for every newly set password (existing passwords keep working). A `DEFAULT_ADMIN_PASS` shorter than that is ignored in favour of a random one
+- Login with an unknown username now takes as long as with a wrong password, so response time no longer reveals which usernames exist
+
 ### Fixed
 - Changing your password from the profile panel always failed (the request sent the wrong field names)
 

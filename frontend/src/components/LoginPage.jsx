@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { LogIn, UserPlus, Eye, EyeOff, Radio } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSite } from '../context/SiteContext.jsx';
+import { MIN_PASSWORD_LENGTH } from '../utils/password.js';
 
 export default function LoginPage({ onCancel }) {
   const { t } = useTranslation();
@@ -89,7 +90,7 @@ export default function LoginPage({ onCancel }) {
 
   const validate = () => {
     if (!form.username || form.username.length < 2) { setError(t('loginPage.usernameTooShort')); return false; }
-    if (!form.password || form.password.length < 6) { setError(t('loginPage.passwordTooShort')); return false; }
+    if (!form.password || form.password.length < MIN_PASSWORD_LENGTH) { setError(t('loginPage.passwordTooShort', { min: MIN_PASSWORD_LENGTH })); return false; }
     if (isSetup && form.password !== form.confirm)  { setError(t('loginPage.passwordsMismatch')); return false; }
     return true;
   };
@@ -156,7 +157,7 @@ export default function LoginPage({ onCancel }) {
                 <input className="pm-input" type={showPw ? 'text' : 'password'}
                   autoComplete={isSetup ? 'new-password' : 'current-password'}
                   value={form.password} onChange={e => set('password', e.target.value)}
-                  placeholder={isSetup ? t('loginPage.min6chars') : t('loginPage.enterPassword')}
+                  placeholder={isSetup ? t('loginPage.minChars', { min: MIN_PASSWORD_LENGTH }) : t('loginPage.enterPassword')}
                   style={{ paddingRight:'2.5rem' }} />
                 <button type="button" onClick={() => setShowPw(s => !s)} style={{
                   position:'absolute', right:'0.5rem', top:'50%', transform:'translateY(-50%)',

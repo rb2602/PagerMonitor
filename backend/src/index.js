@@ -54,6 +54,14 @@ async function main() {
   await ensureDefaultAdmin();
 
   const app = express();
+  // Which proxies may set X-Forwarded-For, i.e. how req.ip finds the real client — the
+  // login rate limits key on it. Default: proxies on the same host or a private network
+  // (nginx in front, Docker bridge); a directly exposed server ignores the header, so it
+  // can't be spoofed from the internet. Override with TRUST_PROXY (true/false, a hop
+  // count, or Express's address/subnet list syntax).
+  const trustProxy = process.env.TRUST_PROXY || 'loopback, linklocal, uniquelocal';
+  app.set('trust proxy', trustProxy === 'true' ? true : trustProxy === 'false' ? false
+    : /^\d+$/.test(trustProxy) ? parseInt(trustProxy, 10) : trustProxy);
   app.use(cors({ origin: true, credentials: true }));
   // Pin the browser default explicitly: cross-origin requests (map tiles, Google Maps links)
   // only ever see our origin, never a full URL — which can carry a ?reset= token.

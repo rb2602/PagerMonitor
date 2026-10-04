@@ -1,7 +1,8 @@
 const express = require('express');
 const router  = express.Router();
 const { register, login, destroySession, requireAuth, requireAdmin, requirePlatformAdmin,
-        changePassword, adminSetPassword, manageUserError, extractToken } = require('../services/auth');
+        changePassword, adminSetPassword, manageUserError, extractToken, MIN_PASSWORD_LENGTH } = require('../services/auth');
+const { loginLimiters, forgotPasswordLimiters, resetPasswordLimiter, joinLimiter } = require('../utils/rateLimits');
 const {
   getUsers, getUserById, countUsers, deleteUser, updateUserRole, updateUserEmail, setUserOrg,
   setUserPlatformAdmin, getInviteByCode, consumeInvite, addAuditLog, getDb, getOrganization,
@@ -11,10 +12,12 @@ const logger = require('../utils/logger');
 
 
 // POST /auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiters, async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+    if (!username || !password || typeof username !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ error: 'username and password required' });
+    }
     const result = await login(username, password);
     res.json(result);
   } catch (e) {
@@ -27,7 +30,7 @@ router.post('/login', async (req, res) => {
 // Public (no auth) — mirrors /auth/login's response shape so the frontend reuses its existing
 // post-login flow. A future self-service /auth/signup (creates a fresh org instead of joining
 // an existing one) would share this same "create user + create session" tail.
-router.post('/join', async (req, res) => {
+router.post('/join', joinLimiter, async (req, res) => {
   try {
     const { code, username, password, email } = req.body;
     if (!code) return res.status(400).json({ error: 'Invite code required' });
@@ -225,10 +228,10 @@ router.put('/me/notif-prefs', requireAuth, (req, res) => {
 });
 
 // POST /auth/forgot-password — request reset email
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', forgotPasswordLimiters, async (req, res) => {
   try {
     const { username } = req.body;
-    if (!username) return res.status(400).json({ error: 'username required' });
+    if (!username || typeof username !== 'string') return res.status(400).json({ error: 'username required' });
     const { getUserByUsername } = require('../services/database');
     const { generateResetToken, sendPasswordReset, getEmailConfig } = require('../services/email');
     const cfg = getEmailConfig();
@@ -253,11 +256,12 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // POST /auth/reset-password — consume token, set new password
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', resetPasswordLimiter, async (req, res) => {
   try {
     const { token, password } = req.body;
-    if (!token || !password) return res.status(400).json({ error: 'token and password required' });
-    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    if (!token || !password || typeof password !== 'string') return res.status(400).json({ error: 'token and password required' });
+    // Checked before the token is consumed, so a too-short password doesn't burn the link
+    if (password.length < MIN_PASSWORD_LENGTH) return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
     const { consumeResetToken } = require('../services/email');
     const userId = consumeResetToken(token);
     if (!userId) return res.status(400).json({ error: 'Invalid or expired reset link' });

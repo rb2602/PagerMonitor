@@ -5,6 +5,11 @@ const logger = require('../utils/logger');
 const { hashToken } = require('../utils/tokens');
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const MIN_PASSWORD_LENGTH = 10; // applies whenever a password is set; existing ones stay valid
+const PASSWORD_TOO_SHORT = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+// Compared against when the username doesn't exist, so an unknown user takes as long to
+// reject as a wrong password (otherwise response time reveals which usernames exist).
+const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 // Stored in auth_sessions as SHA-256(token) → user id. There is deliberately no in-memory
@@ -59,7 +64,7 @@ function getPublicOrgId() {
 // ── User ops ──────────────────────────────────────────────────────────────────
 async function register(username, password, role = 'viewer', orgId = null, isPlatformAdmin = false) {
   if (!username || username.length < 2) throw new Error('Username must be at least 2 characters');
-  if (!password || password.length < 6) throw new Error('Password must be at least 6 characters');
+  if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) throw new Error(PASSWORD_TOO_SHORT);
   if (!['admin', 'editor', 'viewer'].includes(role)) throw new Error('Role must be admin, editor or viewer');
   if (db.getUserByUsername(username)) throw new Error('Username already taken');
   const hash = await bcrypt.hash(password, 10);
@@ -70,9 +75,8 @@ async function register(username, password, role = 'viewer', orgId = null, isPla
 
 async function login(username, password) {
   const user = db.getUserByUsername(username);
-  if (!user) throw new Error('Invalid username or password');
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok)  throw new Error('Invalid username or password');
+  const ok = await bcrypt.compare(password, user ? user.password : DUMMY_HASH);
+  if (!user || !ok) throw new Error('Invalid username or password');
   db.touchUserLogin(user.id);
   const token = createSession(user);
   logger.info(`Login: ${username}`);
@@ -90,14 +94,14 @@ async function changePassword(userId, oldPassword, newPassword, keepToken) {
   if (!user) throw new Error('User not found');
   const ok = await bcrypt.compare(oldPassword, user.password);
   if (!ok)  throw new Error('Current password is incorrect');
-  if (newPassword.length < 6) throw new Error('New password must be at least 6 characters');
+  if (newPassword.length < MIN_PASSWORD_LENGTH) throw new Error(`New password must be at least ${MIN_PASSWORD_LENGTH} characters`);
   db.updateUserPassword(userId, await bcrypt.hash(newPassword, 10));
   revokeUserSessions(userId, keepToken);
 }
 
 // Admin reset or emailed reset link — the user is logged out on every device.
 async function adminSetPassword(userId, newPassword) {
-  if (newPassword.length < 6) throw new Error('Password must be at least 6 characters');
+  if (typeof newPassword !== 'string' || newPassword.length < MIN_PASSWORD_LENGTH) throw new Error(PASSWORD_TOO_SHORT);
   db.updateUserPassword(userId, await bcrypt.hash(newPassword, 10));
   revokeUserSessions(userId);
 }
@@ -169,7 +173,12 @@ function manageUserError(session, target) {
 async function ensureDefaultAdmin() {
   if (db.countUsers() === 0) {
     const orgId = db.createOrganization('My Organization', null);
-    const pass = process.env.DEFAULT_ADMIN_PASS || crypto.randomBytes(12).toString('hex');
+    let pass = process.env.DEFAULT_ADMIN_PASS;
+    if (pass && pass.length < MIN_PASSWORD_LENGTH) {
+      logger.warn(`DEFAULT_ADMIN_PASS is shorter than ${MIN_PASSWORD_LENGTH} characters — ignoring it and generating a random password instead`);
+      pass = null;
+    }
+    pass = pass || crypto.randomBytes(12).toString('hex');
     await register('admin', pass, 'admin', orgId, true);
     logger.warn(`⚠  Default admin created  username=admin  password=${pass}`);
     logger.warn('   Change this password in Admin → Users immediately!');
@@ -180,5 +189,5 @@ module.exports = {
   register, login, changePassword, adminSetPassword,
   createSession, validateSession, destroySession, revokeUserSessions, getPublicOrgId,
   requireAuth, requireAdmin, requireEditor, requirePlatformAdmin, ensureDefaultAdmin,
-  manageUserError, extractToken,
+  manageUserError, extractToken, MIN_PASSWORD_LENGTH,
 };
