@@ -5,7 +5,7 @@ const { register, login, destroySession, requireAuth, requireAdmin, requirePlatf
 const {
   getUsers, getUserById, countUsers, deleteUser, updateUserRole, updateUserEmail, setUserOrg,
   setUserPlatformAdmin, getInviteByCode, consumeInvite, addAuditLog, getDb, getOrganization,
-  updateUserUiLanguage,
+  updateUserUiLanguage, getSetting,
 } = require('../services/database');
 const logger = require('../utils/logger');
 
@@ -230,12 +230,19 @@ router.post('/forgot-password', async (req, res) => {
     const { generateResetToken, sendPasswordReset, getEmailConfig } = require('../services/email');
     const cfg = getEmailConfig();
     if (!cfg.enabled) return res.status(503).json({ error: 'Email not configured on this server' });
+    // Reset links are built from the admin-configured public URL only — never from the
+    // request's Origin/Host headers, which the requester controls (an attacker could
+    // otherwise make a victim's genuine reset email point at a domain they own).
+    const publicUrl = getSetting('site_settings', {}).publicUrl || '';
+    if (!publicUrl) {
+      logger.warn('Password reset requested, but no public URL is configured (Admin → Site settings)');
+      return res.status(503).json({ error: 'Password reset is not available — the server has no public URL configured' });
+    }
     const user = getUserByUsername(username);
     // Always return ok to avoid user enumeration
     if (user?.email) {
       const token = generateResetToken(user.id);
-      const baseUrl = req.headers.origin || `http://${req.headers.host}`;
-      const resetUrl = `${baseUrl}/?reset=${token}`;
+      const resetUrl = `${publicUrl}/?reset=${token}`;
       await sendPasswordReset(user, resetUrl).catch(e => logger.warn(`Reset email failed: ${e.message}`));
     }
     res.json({ ok: true, message: 'If this account exists and has an email, a reset link has been sent.' });

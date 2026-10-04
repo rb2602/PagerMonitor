@@ -306,6 +306,22 @@ function _migrate() {
     db.exec('ALTER TABLE sessions ADD COLUMN is_platform_admin INTEGER NOT NULL DEFAULT 0');
     logger.info('Migration: added org_id/is_platform_admin to sessions');
   }
+
+  // Password reset tokens — previously a JSON map in settings.pw_reset_tokens holding the
+  // raw tokens. Only the SHA-256 digest is stored now; any outstanding legacy tokens are
+  // dropped rather than migrated (they were valid for an hour at most anyway).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      token_hash TEXT    PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires    INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
+  `);
+  if (db.prepare("DELETE FROM settings WHERE key = 'pw_reset_tokens'").run().changes) {
+    logger.info('Migration: dropped legacy plaintext password reset tokens');
+  }
+
   const auditColumns = db.prepare("PRAGMA table_info(audit_log)").all().map(c => c.name);
   if (!auditColumns.includes('org_id')) {
     db.exec('ALTER TABLE audit_log ADD COLUMN org_id INTEGER');
@@ -1410,6 +1426,29 @@ function deleteDbSession(token) {
 function loadActiveSessions() {
   return getDb().prepare('SELECT * FROM sessions WHERE expires > ?').all(Date.now());
 }
+
+// ── Password resets ───────────────────────────────────────────────────────────
+function savePasswordReset(tokenHash, userId, expires) {
+  const d = getDb();
+  d.prepare('DELETE FROM password_resets WHERE expires <= ?').run(Date.now());
+  d.prepare('INSERT INTO password_resets (token_hash, user_id, expires) VALUES (?, ?, ?)').run(tokenHash, userId, expires);
+}
+// Single-use: a successful lookup also burns every other outstanding reset link for the
+// same user, so an older email can't be used after the password has already been reset.
+// Returns the user id, or null if the token is unknown or expired.
+function consumePasswordReset(tokenHash) {
+  const d = getDb();
+  return d.transaction(() => {
+    const row = d.prepare('SELECT user_id, expires FROM password_resets WHERE token_hash = ?').get(tokenHash);
+    if (!row) return null;
+    if (Date.now() > row.expires) {
+      d.prepare('DELETE FROM password_resets WHERE token_hash = ?').run(tokenHash);
+      return null;
+    }
+    d.prepare('DELETE FROM password_resets WHERE user_id = ?').run(row.user_id);
+    return row.user_id;
+  })();
+}
 function upsertUserLocation(userId, username, lat, lng) {
   getDb().prepare(`
     INSERT INTO user_locations (user_id, username, lat, lng, updated_at)
@@ -1473,6 +1512,7 @@ module.exports = {
   getStats,
   getMessageNotes, addMessageNote, deleteMessageNote, getNoteCounts,
   saveDbSession, deleteDbSession, loadActiveSessions, pruneExpiredSessions,
+  savePasswordReset, consumePasswordReset,
   upsertUserLocation, getUserLocations, deleteUserLocation, enrichSourceLabels, getLocalDongleLabel,
   getSourceOptions,
 };

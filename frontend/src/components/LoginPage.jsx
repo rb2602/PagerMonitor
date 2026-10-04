@@ -31,10 +31,16 @@ export default function LoginPage({ onCancel }) {
   const sendForgot = async () => {
     if (!forgotUser) return;
     try {
-      await fetch(`${BASE}/auth/forgot-password`, {
+      const r = await fetch(`${BASE}/auth/forgot-password`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ username: forgotUser }),
       });
+      // e.g. 503 when email or the public URL isn't configured — don't claim a link was sent
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        setForgotMsg(d.error || t('loginPage.forgotFailed'));
+        return;
+      }
       setForgotSent(true);
     } catch { setForgotMsg(t('loginPage.forgotFailed')); }
   };

@@ -455,8 +455,10 @@ in single mode but fails to bring SDR up at all in multi mode is the telltale sy
 - Global filter (Admin → Notifications → Services) applies only to Discord, Telegram, Gotify, Pushover, and MQTT
 
 **Password reset**
-- "Forgot password" on login page → email with reset link (1 hour expiry)
-- Requires email configured in Admin → Email and email set on user account
+- "Forgot password" on login page → email with reset link (1 hour expiry, single use)
+- Requires email configured in Admin → Email, email set on user account, and the
+  **Public URL** set in Admin → Site settings (the `https://` address users reach the
+  server at — reset links are built from it, never from the request's headers)
 
 **Archive**
 - Messages older than N hours auto-moved to `archive.db`

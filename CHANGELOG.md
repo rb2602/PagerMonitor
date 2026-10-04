@@ -11,6 +11,13 @@ Versioning follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATC
 
 ---
 
+## [Unreleased]
+
+### Security
+- **Password reset links can no longer be redirected** — links were built from the request's `Origin`/`Host` header, so anyone could trigger a genuine reset email pointing at their own domain. They now use the new **Public URL** setting (Admin → Site settings); password reset stays disabled until it is set
+- **Reset tokens now actually expire** after 1 hour, are single-use (using one invalidates all other outstanding links for that user), and are stored only as a SHA-256 hash in a new `password_resets` table. Outstanding legacy tokens are dropped on upgrade
+- Reset token is removed from the address bar as soon as the reset page loads; `Referrer-Policy: strict-origin-when-cross-origin` is now sent explicitly
+
 ## [2.5.0] — 2026-08-12
 
 ### Added

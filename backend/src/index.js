@@ -58,6 +58,9 @@ async function main() {
 
   const app = express();
   app.use(cors({ origin: true, credentials: true }));
+  // Pin the browser default explicitly: cross-origin requests (map tiles, Google Maps links)
+  // only ever see our origin, never a full URL — which can carry a ?reset= token.
+  app.use((_req, res, next) => { res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin'); next(); });
   app.use(express.json({ limit: '500mb' }));
   app.use(express.raw({ type: 'application/octet-stream', limit: '500mb' }));
 
